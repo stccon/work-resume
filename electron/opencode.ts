@@ -1,8 +1,31 @@
 import { spawn, ChildProcess } from "child_process"
+import { app, BrowserWindow } from "electron"
+import fs from "fs"
+import path from "path"
 
 let serverProcess: ChildProcess | null = null
 let serverUrl: string | null = null
-let currentSessionId: string | null = null
+let client: any = null
+let sessionId: string | null = null
+let currentModel = "big-pickle"
+
+function getBinaryPath(): string {
+  const binaryName = process.platform === "win32" ? "opencode.exe" : "opencode"
+
+  if (app.isPackaged) {
+    const p = path.join(process.resourcesPath, "opencode-ai", "bin", binaryName)
+    if (fs.existsSync(p)) return p
+    console.warn("Bundled opencode binary not found at", p, "falling back to PATH")
+  }
+
+  const devPath = path.join(__dirname, "..", "node_modules", "opencode-ai", "bin", binaryName)
+  if (fs.existsSync(devPath)) return devPath
+
+  const cwdPath = path.join(process.cwd(), "node_modules", "opencode-ai", "bin", binaryName)
+  if (fs.existsSync(cwdPath)) return cwdPath
+
+  return binaryName
+}
 
 export function isMockMode() {
   return false
@@ -11,16 +34,16 @@ export function isMockMode() {
 export async function startOpencode(): Promise<void> {
   if (serverProcess) return
 
+  const cmd = getBinaryPath()
+
+  serverProcess = spawn(cmd, ["serve"], {
+    cwd: process.cwd(),
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: true,
+    env: process.env,
+  })
+
   return new Promise((resolve, reject) => {
-    const cmd = process.platform === "win32" ? "opencode.cmd" : "opencode"
-
-    serverProcess = spawn(cmd, ["serve"], {
-      cwd: process.cwd(),
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
-      env: process.env,
-    })
-
     let found = false
     let output = ""
 
@@ -66,53 +89,171 @@ export async function startOpencode(): Promise<void> {
   })
 }
 
-async function createSession(): Promise<string> {
-  if (!serverUrl) throw new Error("opencode 未启动")
-  const res = await fetch(`${serverUrl}/session`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  })
-  if (!res.ok) {
-    throw new Error(`创建会话失败: ${res.status} ${await res.text()}`)
+async function getClient() {
+  if (client) return client
+  if (!serverUrl) throw new Error("Opencode 未连接")
+  const sdk = await import("@opencode-ai/sdk")
+  client = sdk.createOpencodeClient({ baseUrl: serverUrl })
+  return client
+}
+
+async function ensureSession(): Promise<string> {
+  if (sessionId) return sessionId
+  const c = await getClient()
+  const session = await Promise.race([
+    c.session.create(),
+    new Promise<any>((_, reject) =>
+      setTimeout(() => reject(new Error("会话创建超时")), 15000)
+    ),
+  ])
+  if (session.error) throw new Error(JSON.stringify(session.error))
+  sessionId = session.data?.id
+  if (!sessionId) throw new Error("会话 ID 为空")
+  return sessionId
+}
+
+async function streamFromGlobalEvents(
+  sid: string,
+  win: BrowserWindow,
+  signal: AbortSignal
+) {
+  if (!serverUrl) return
+  try {
+    const res = await fetch(`${serverUrl}/global/event`, { signal })
+    if (!res.ok || !res.body) return
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ""
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split("\n")
+      buf = lines.pop() || ""
+
+      let eventType = ""
+      for (const line of lines) {
+        const t = line.trim()
+        if (t.startsWith("event:")) {
+          eventType = t.slice(6).trim()
+        } else if (t.startsWith("data:")) {
+          const jsonStr = t.slice(5).trim()
+          try {
+            const data = JSON.parse(jsonStr)
+            // raw SSE data: { directory, payload: Event }
+            const payload = data?.payload
+            if (!payload?.properties) { eventType = ""; continue }
+
+            const props = payload.properties
+            const sessionMatch = props.sessionID || props?.part?.sessionID || ""
+            if (sessionMatch !== sid) { eventType = ""; continue }
+
+            // Extract text: delta (incremental) > text (final) > part.text (v1)
+            const text = props.delta || props.text || props?.part?.text || ""
+            if (!text) { eventType = ""; continue }
+
+            const pType = payload.type || eventType
+
+            // v2: session.next.text.delta/ended, message.part.delta + field, v1: message.part.updated + part.type
+            const isText = pType.includes("text") ||
+              (pType === "message.part.delta" && props.field === "text") ||
+              (pType === "message.part.updated" && props?.part?.type === "text")
+            const isReason = pType.includes("reason") ||
+              (pType === "message.part.delta" && props.field === "reasoning") ||
+              (pType === "message.part.updated" && props?.part?.type === "reasoning")
+
+            if (isText) {
+              win.webContents.send("chat:chunk", { type: "text", text })
+            } else if (isReason) {
+              win.webContents.send("chat:chunk", { type: "thinking", text })
+            }
+          } catch { /* json parse */ }
+          eventType = ""
+        }
+      }
+    }
+  } catch {
+    // stream aborted or closed
   }
-  const data: any = await res.json()
-  if (!data.id) throw new Error("创建会话返回无 ID")
-  return data.id
 }
 
-async function sendPromptToSession(sessionId: string, text: string): Promise<string> {
-  if (!serverUrl) throw new Error("opencode 未启动")
-  const res = await fetch(`${serverUrl}/session/${sessionId}/message`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      parts: [{ type: "text", text }],
-      model: { providerID: "opencode", modelID: "big-pickle" },
-    }),
-  })
-  if (!res.ok) {
-    throw new Error(`请求失败: ${res.status} ${await res.text()}`)
+export async function sendPrompt(
+  text: string,
+  win?: BrowserWindow | null
+): Promise<{ content: string; thinking: string }> {
+  const c = await getClient()
+  const sid = await ensureSession()
+
+  const abortController = new AbortController()
+
+  if (win) {
+    streamFromGlobalEvents(sid, win, abortController.signal)
   }
-  const result: any = await res.json()
-  const parts = result.parts || result.data?.parts || []
-  return parts
-    .filter((p: any) => p.type === "text")
-    .map((p: any) => p.text)
-    .join("")
+
+  try {
+    const result = await Promise.race([
+      c.session.prompt({
+        path: { id: sid },
+        body: {
+          parts: [{ type: "text", text }],
+          model: { providerID: "opencode", modelID: currentModel },
+        },
+      }),
+      new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error("AI 响应超时（60秒）")), 60000)
+      ),
+    ])
+
+    if (result.error) throw new Error(JSON.stringify(result.error))
+
+    const parts = result.data?.parts || []
+    const content = parts
+      .filter((p: any) => p.type === "text")
+      .map((p: any) => p.text)
+      .join("")
+    const thinking = parts
+      .filter((p: any) => p.type === "reasoning")
+      .map((p: any) => p.text)
+      .join("\n")
+
+    if (win) {
+      win.webContents.send("chat:chunk", { type: "done", content, thinking })
+    }
+    return { content: content || "(空回复)", thinking }
+  } finally {
+    abortController.abort()
+  }
 }
 
-export async function sendPrompt(text: string): Promise<string> {
-  if (!serverUrl) throw new Error("opencode 未连接，请等待启动完成")
-  const sid = currentSessionId || await createSession()
-  currentSessionId = sid
-  return await sendPromptToSession(sid, text)
+export function setModel(model: string) {
+  currentModel = model
 }
 
-export function setModel(_model: string) {}
+export function getCurrentModel() {
+  return currentModel
+}
 
-export function getModels() {
-  return ["qwen3.6", "big-pickle"]
+export async function getModels(): Promise<string[]> {
+  try {
+    const c = await getClient()
+    const result = await c.config.providers()
+    const providers = result.data?.providers || []
+    const opencodeProvider = providers.find((p: any) => p.id === "opencode")
+    if (!opencodeProvider) return ["big-pickle"]
+
+    return Object.entries(opencodeProvider.models)
+      .filter(([_, m]: [string, any]) => {
+        const cost = m.cost || { input: 0, output: 0 }
+        return cost.input === 0 && cost.output === 0
+      })
+      .map(([id]: [string, any]) => id)
+  } catch (err) {
+    console.warn("Failed to fetch models, using fallback:", err)
+    return ["big-pickle"]
+  }
 }
 
 export async function stopOpencode() {
@@ -121,5 +262,6 @@ export async function stopOpencode() {
     serverProcess = null
   }
   serverUrl = null
-  currentSessionId = null
+  client = null
+  sessionId = null
 }

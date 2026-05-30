@@ -22,3 +22,7 @@ files:
   - dist-electron
   - templates
   - package.json
+
+extraResources:
+  - from: node_modules/opencode-ai/bin
+    to: opencode-ai/bin

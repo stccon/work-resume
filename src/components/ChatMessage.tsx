@@ -8,8 +8,19 @@ interface ChatMessageProps {
   thinking?: string
 }
 
+function TypingDots() {
+  return (
+    <span className="inline-flex gap-0.5">
+      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "0ms" }} />
+      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "150ms" }} />
+      <span className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: "300ms" }} />
+    </span>
+  )
+}
+
 export function ChatMessage({ role, content, thinking }: ChatMessageProps) {
   const [showThinking, setShowThinking] = useState(true)
+  const isLoading = role === "assistant" && (content === "..." || content === "")
 
   return (
     <div className={cn("flex gap-3 px-4 py-3", role === "user" ? "justify-end" : "justify-start")}>
@@ -43,7 +54,7 @@ export function ChatMessage({ role, content, thinking }: ChatMessageProps) {
               : "bg-card text-card-foreground border border-border"
           )}
         >
-          {content || (role === "assistant" ? "..." : "")}
+          {isLoading ? <TypingDots /> : (content || (role === "assistant" ? "..." : ""))}
         </div>
       </div>
       {role === "user" && (
