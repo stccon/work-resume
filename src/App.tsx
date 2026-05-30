@@ -110,16 +110,20 @@ function App() {
     thinkBufferRef.current = ""
 
     window.electronAPI.removeChatListeners()
+    // Strip echoed user input prefix
+    const stripped = (s: string) => s.startsWith(text) ? s.slice(text.length) : s
+
     window.electronAPI.onChatChunk((chunk) => {
       if (chunk.type === "text") {
         charBufferRef.current += chunk.text
-        setStreamingContent((prev) => prev + chunk.text)
+        setStreamingContent(stripped(charBufferRef.current))
       } else if (chunk.type === "thinking") {
         thinkBufferRef.current += chunk.text
         setStreamingThinking(thinkBufferRef.current)
       } else if (chunk.type === "done") {
         window.electronAPI.removeChatListeners()
-        const content = chunk.content || charBufferRef.current || "(无回复)"
+        const raw = chunk.content || charBufferRef.current || "(无回复)"
+        const content = stripped(raw)
         const thinking = chunk.thinking || thinkBufferRef.current || ""
         setMessages((prev) => {
           const updated = [...prev, { role: "assistant" as const, content, thinking }]

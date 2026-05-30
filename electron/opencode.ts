@@ -157,7 +157,6 @@ async function streamFromGlobalEvents(
 
             const pType = payload.type || eventType
 
-            // v2: session.next.text.delta/ended, message.part.delta + field, v1: message.part.updated + part.type
             const isText = pType.includes("text") ||
               (pType === "message.part.delta" && props.field === "text") ||
               (pType === "message.part.updated" && props?.part?.type === "text")
