@@ -14,8 +14,10 @@
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.0.0",
+    "@react-pdf/renderer": "^4.5.1",
     "electron-store": "^8.2.0",
     "opencode-ai": "^1.15.12",
+    "pdfjs-dist": "^6.0.227",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.0"

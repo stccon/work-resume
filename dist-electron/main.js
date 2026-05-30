@@ -23,8 +23,8 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 const electron = require("electron");
 const path = require("path");
-const child_process = require("child_process");
 const fs = require("fs");
+const child_process = require("child_process");
 let serverProcess = null;
 let serverUrl = null;
 let client = null;
@@ -42,6 +42,9 @@ function getBinaryPath() {
   const cwdPath = path.join(process.cwd(), "node_modules", "opencode-ai", "bin", binaryName);
   if (fs.existsSync(cwdPath)) return cwdPath;
   return binaryName;
+}
+function isMockMode() {
+  return false;
 }
 async function startOpencode() {
   if (serverProcess) return;
@@ -176,7 +179,14 @@ async function streamFromGlobalEvents(sid, win, signal) {
   } catch {
   }
 }
-async function sendPrompt(text, win) {
+let conversationContext = "";
+function setConversationContext(ctx) {
+  conversationContext = ctx;
+}
+function clearConversationContext() {
+  conversationContext = "";
+}
+async function sendPrompt(text, win, asFirstMessage = false) {
   var _a;
   const c = await getClient();
   const sid = await ensureSession();
@@ -184,12 +194,16 @@ async function sendPrompt(text, win) {
   if (win) {
     streamFromGlobalEvents(sid, win, abortController.signal);
   }
+  const prefix = asFirstMessage ? "" : "用户消息: ";
+  const fullText = conversationContext ? `${conversationContext}
+
+${prefix}${text}` : text;
   try {
     const result = await Promise.race([
       c.session.prompt({
         path: { id: sid },
         body: {
-          parts: [{ type: "text", text }],
+          parts: [{ type: "text", text: fullText }],
           model: { providerID: "opencode", modelID: currentModel }
         }
       }),
@@ -232,6 +246,53 @@ async function getModels() {
     return ["big-pickle"];
   }
 }
+function getBaseDir() {
+  if (electron.app.isPackaged) {
+    return path.join(electron.app.getPath("userData"), "resume-ai");
+  }
+  return path.join(__dirname, "..");
+}
+function ensureDir(dir) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+function getTemplatesDir() {
+  return ensureDir(path.join(getBaseDir(), "templates"));
+}
+function getResumesDir() {
+  return ensureDir(path.join(getBaseDir(), "resumes"));
+}
+function getUserdataDir() {
+  return ensureDir(path.join(getBaseDir(), "userdata"));
+}
+function getUserDir(userId) {
+  return ensureDir(path.join(getUserdataDir(), userId));
+}
+function getUserProfilePath(userId) {
+  return path.join(getUserDir(userId), "profile.json");
+}
+function getUserConversationsDir(userId) {
+  return ensureDir(path.join(getUserDir(userId), "conversations"));
+}
+function getUserPreferencesPath(userId) {
+  return path.join(getUserDir(userId), "preferences.json");
+}
+function getUserResumeDraftPath(userId) {
+  return path.join(getUserDir(userId), "resume-draft.json");
+}
+function listUsers() {
+  const dir = getUserdataDir();
+  return fs.readdirSync(dir).filter((name) => {
+    const sub = path.join(dir, name);
+    return fs.statSync(sub).isDirectory();
+  });
+}
+function generateResumeFileName(userName, templateLabel) {
+  const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  return `${userName}_${templateLabel}_${date}.pdf`;
+}
 const Store = require("electron-store");
 const store = new Store({ encryptionKey: "resume-ai-local" });
 function getResumes() {
@@ -239,6 +300,19 @@ function getResumes() {
 }
 function saveResumes(resumes) {
   store.set("resumes", resumes);
+}
+function readJSONSafe(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+function writeJSONSafe(filePath, data) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 function generateHTML(data, template) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
@@ -284,6 +358,14 @@ function generateHTML(data, template) {
   ${sectionsHtml}
 </body></html>`;
 }
+function readTemplateJSON(name) {
+  const templatesDir = getTemplatesDir();
+  for (const ext of ["", ".json"]) {
+    const p = path.join(templatesDir, `${name}${ext}`);
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf-8"));
+  }
+  return null;
+}
 function setupIPC() {
   electron.ipcMain.handle("chat:send", async (event, text) => {
     const win = electron.BrowserWindow.fromWebContents(event.sender);
@@ -294,6 +376,22 @@ function setupIPC() {
       console.error("chat:send error:", err);
       return { content: `（错误）${err.message || String(err)}`, thinking: "" };
     }
+  });
+  electron.ipcMain.handle("chat:send-first-message", async (event, prompt) => {
+    const win = electron.BrowserWindow.fromWebContents(event.sender);
+    try {
+      const result = await sendPrompt(prompt, win, true);
+      return result;
+    } catch (err) {
+      console.error("chat:send-first-message error:", err);
+      return { content: `（错误）${err.message || String(err)}`, thinking: "" };
+    }
+  });
+  electron.ipcMain.handle("chat:set-context", async (_event, context) => {
+    setConversationContext(context);
+  });
+  electron.ipcMain.handle("chat:clear-context", async () => {
+    clearConversationContext();
   });
   electron.ipcMain.handle("models:list", async () => {
     return getModels();
@@ -315,7 +413,7 @@ function setupIPC() {
     store.delete(`apikey-${provider}`);
   });
   electron.ipcMain.handle("templates:list", async () => {
-    const templatesDir = path.join(__dirname, "../templates");
+    const templatesDir = getTemplatesDir();
     if (!fs.existsSync(templatesDir)) return [];
     const files = fs.readdirSync(templatesDir).filter((f) => f.endsWith(".json"));
     return files.map((f) => {
@@ -324,12 +422,64 @@ function setupIPC() {
     });
   });
   electron.ipcMain.handle("templates:get", async (_event, name) => {
-    const filePath = path.join(__dirname, "../templates", `${name}.json`);
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return readTemplateJSON(name);
+  });
+  electron.ipcMain.handle("user:list", async () => {
+    return listUsers();
+  });
+  electron.ipcMain.handle("user:profile-load", async (_event, userId) => {
+    return readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null };
+  });
+  electron.ipcMain.handle("user:profile-save", async (_event, userId, data) => {
+    var _a, _b;
+    const profile = readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null };
+    profile.sections = data.sections || profile.sections;
+    profile.name = ((_b = (_a = data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || profile.name;
+    profile.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    writeJSONSafe(getUserProfilePath(userId), profile);
+    return profile;
+  });
+  electron.ipcMain.handle("user:preferences-load", async (_event, userId) => {
+    return readJSONSafe(getUserPreferencesPath(userId)) || {
+      template: "general",
+      accentColor: "#2563eb",
+      fontFamily: "system",
+      fontSize: "medium",
+      layout: "single"
+    };
+  });
+  electron.ipcMain.handle("user:preferences-save", async (_event, userId, prefs) => {
+    writeJSONSafe(getUserPreferencesPath(userId), prefs);
+    return prefs;
+  });
+  electron.ipcMain.handle("user:conversation-save", async (_event, userId, messages) => {
+    const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+    const convDir = getUserConversationsDir(userId);
+    const filePath = path.join(convDir, `${date}.json`);
+    const existing = readJSONSafe(filePath) || { date, userId, messages: [] };
+    existing.messages = messages;
+    existing.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    writeJSONSafe(filePath, existing);
+    return existing;
+  });
+  electron.ipcMain.handle("user:conversation-list", async (_event, userId) => {
+    const convDir = getUserConversationsDir(userId);
+    if (!fs.existsSync(convDir)) return [];
+    return fs.readdirSync(convDir).filter((f) => f.endsWith(".json")).map((f) => {
+      var _a;
+      const data = readJSONSafe(path.join(convDir, f));
+      return { date: f.replace(".json", ""), messageCount: ((_a = data == null ? void 0 : data.messages) == null ? void 0 : _a.length) || 0, updatedAt: (data == null ? void 0 : data.updatedAt) || "" };
+    }).sort((a, b) => b.date.localeCompare(a.date));
+  });
+  electron.ipcMain.handle("user:draft-save", async (_event, userId, data) => {
+    writeJSONSafe(getUserResumeDraftPath(userId), data);
+    return data;
+  });
+  electron.ipcMain.handle("user:draft-load", async (_event, userId) => {
+    return readJSONSafe(getUserResumeDraftPath(userId));
   });
   electron.ipcMain.handle("resume:save", async (_event, data, template) => {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const resumes = getResumes();
     const id = `resume_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const name = ((_b = (_a = data == null ? void 0 : data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "未命名简历";
@@ -343,6 +493,14 @@ function setupIPC() {
     };
     resumes.unshift(entry);
     saveResumes(resumes.slice(0, 50));
+    const userName = (_d = (_c = data == null ? void 0 : data.sections) == null ? void 0 : _c.personal) == null ? void 0 : _d.name;
+    if (userName) {
+      const profile = readJSONSafe(getUserProfilePath(userName)) || { sections: {}, updatedAt: null };
+      profile.sections = data.sections || profile.sections;
+      profile.name = userName;
+      profile.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
+      writeJSONSafe(getUserProfilePath(userName), profile);
+    }
     return entry;
   });
   electron.ipcMain.handle("resume:list", async () => {
@@ -380,9 +538,11 @@ function setupIPC() {
             margins: { top: 0, bottom: 0, left: 0, right: 0 }
           });
           const name = ((_b = (_a = data == null ? void 0 : data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "简历";
+          const tmplLabel = (template == null ? void 0 : template.label) || "简历";
+          const defaultName = generateResumeFileName(name, tmplLabel);
           const result = await electron.dialog.showSaveDialog(win, {
             title: "导出简历",
-            defaultPath: `${name}_简历.pdf`,
+            defaultPath: defaultName,
             filters: [{ name: "PDF", extensions: ["pdf"] }]
           });
           if (result.canceled || !result.filePath) {
@@ -391,6 +551,12 @@ function setupIPC() {
             return;
           }
           fs.writeFileSync(result.filePath, pdfBuffer);
+          try {
+            const resumesDir = getResumesDir();
+            const copyPath = path.join(resumesDir, path.basename(result.filePath));
+            fs.writeFileSync(copyPath, pdfBuffer);
+          } catch {
+          }
           cleanup();
           resolve({ success: true, path: result.filePath });
         } catch (err) {
@@ -405,19 +571,116 @@ function setupIPC() {
       win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     });
   });
+  electron.ipcMain.handle("resume:save-pdf-buffer", async (_event, buffer) => {
+    const win = electron.BrowserWindow.getFocusedWindow();
+    if (!win) return { success: false, reason: "no_window" };
+    const result = await electron.dialog.showSaveDialog(win, {
+      title: "导出简历",
+      filters: [{ name: "PDF", extensions: ["pdf"] }]
+    });
+    if (result.canceled || !result.filePath) {
+      return { success: false, reason: "canceled" };
+    }
+    fs.writeFileSync(result.filePath, Buffer.from(buffer));
+    try {
+      const resumesDir = getResumesDir();
+      const copyPath = path.join(resumesDir, path.basename(result.filePath));
+      fs.writeFileSync(copyPath, Buffer.from(buffer));
+    } catch {
+    }
+    return { success: true, path: result.filePath };
+  });
+  electron.ipcMain.handle("pdf:extract-style", async (_event, filePath) => {
+    try {
+      const { extractPdfStyle } = await Promise.resolve().then(() => require("./pdf-extractor-BxKYHj3d.js"));
+      return await extractPdfStyle(filePath);
+    } catch (err) {
+      console.error("PDF extraction error:", err);
+      return { error: err.message || String(err) };
+    }
+  });
 }
 async function initOpencode() {
-  await startOpencode();
-  {
-    const savedModel = store.get("currentModel");
-    if (savedModel) {
-      setModel(savedModel);
-      console.log("Restored model:", savedModel);
+  try {
+    await startOpencode();
+    if (isMockMode()) ;
+    else {
+      const savedModel = store.get("currentModel");
+      if (savedModel) {
+        setModel(savedModel);
+        console.log("Restored model:", savedModel);
+      }
+      console.log("Opencode initialized");
     }
-    console.log("Opencode initialized");
+  } catch (err) {
+    console.warn("Opencode failed to start, entering mock mode:", err.message || err);
+  }
+}
+function migrateLegacyData() {
+  var _a, _b, _c, _d;
+  const existingUsers = listUsers();
+  if (existingUsers.length > 0) return;
+  const legacyResumes = getLegacyResumes();
+  if (legacyResumes.length === 0) return;
+  const defaultUserDir = getUserDir("default");
+  if (!fs.existsSync(defaultUserDir)) {
+    fs.mkdirSync(defaultUserDir, { recursive: true });
+  }
+  const latest = legacyResumes.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )[0];
+  const personal = ((_b = (_a = latest.data) == null ? void 0 : _a.sections) == null ? void 0 : _b.personal) || {};
+  const profile = {
+    name: personal.name || latest.title || "用户",
+    sections: ((_c = latest.data) == null ? void 0 : _c.sections) || {},
+    updatedAt: latest.createdAt || null
+  };
+  fs.writeFileSync(getUserProfilePath("default"), JSON.stringify(profile, null, 2), "utf-8");
+  const draft = {
+    template: latest.templateName || latest.templateLabel || "general",
+    sections: ((_d = latest.data) == null ? void 0 : _d.sections) || {},
+    completedAt: latest.createdAt || null
+  };
+  fs.writeFileSync(getUserResumeDraftPath("default"), JSON.stringify(draft, null, 2), "utf-8");
+  const preferences = {
+    template: latest.templateName || "general",
+    accentColor: "#1a56db",
+    fontFamily: "system",
+    fontSize: "13",
+    layout: "standard"
+  };
+  fs.writeFileSync(getUserPreferencesPath("default"), JSON.stringify(preferences, null, 2), "utf-8");
+  console.log(`Migrated ${legacyResumes.length} legacy resume(s) to userdata/default/`);
+}
+function getLegacyResumes() {
+  const userDataPath = electron.app.getPath("userData");
+  const configPath = path.join(userDataPath, "config.json");
+  if (!fs.existsSync(configPath)) return [];
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return config.resumes || [];
+  } catch {
+    return [];
   }
 }
 let mainWindow = null;
+function ensureDirectories() {
+  getTemplatesDir();
+  getResumesDir();
+  getUserdataDir();
+  const devTemplates = path.join(__dirname, "..", "templates");
+  if (fs.existsSync(devTemplates)) {
+    const targetDir = getTemplatesDir();
+    for (const file of fs.readdirSync(devTemplates)) {
+      if (file.endsWith(".json")) {
+        const dest = path.join(targetDir, file);
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(path.join(devTemplates, file), dest);
+        }
+      }
+    }
+  }
+}
 function createWindow() {
   mainWindow = new electron.BrowserWindow({
     width: 1200,
@@ -455,6 +718,8 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err);
 });
 electron.app.whenReady().then(async () => {
+  ensureDirectories();
+  migrateLegacyData();
   setupIPC();
   await initOpencode();
   createWindow();

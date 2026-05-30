@@ -1,11 +1,8 @@
 import { FileText, Settings, Clock, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { SavedResume } from "@/env"
+
 
 interface SidebarProps {
-  templates: { name: string; label: string }[]
-  activeTemplate: string | null
-  onSelectTemplate: (name: string) => void
   onOpenSettings: () => void
   savedResumes: SavedResume[]
   activeResumeId: string | null
@@ -14,9 +11,6 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  templates,
-  activeTemplate,
-  onSelectTemplate,
   onOpenSettings,
   savedResumes,
   activeResumeId,
@@ -25,34 +19,13 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside className="w-64 flex flex-col border-r border-border bg-sidebar">
-      <div className="p-4 border-b border-border">
-        <h2 className="text-base font-semibold">模板</h2>
-      </div>
-      <nav className="overflow-y-auto p-2 space-y-1">
-        {templates.map((t) => (
-          <button
-            key={t.name}
-            onClick={() => onSelectTemplate(t.name)}
-            className={cn(
-              "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
-              activeTemplate === t.name && !activeResumeId
-                ? "bg-accent text-accent-foreground"
-                : "hover:bg-accent/50 text-muted-foreground"
-            )}
-          >
-            <FileText className="w-4 h-4 shrink-0" />
-            <span className="truncate">{t.label}</span>
-          </button>
-        ))}
-      </nav>
-
       {savedResumes.length > 0 && (
         <>
-          <div className="px-4 py-2 border-t border-border">
-            <h3 className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-              <Clock className="w-3 h-3" />
+          <div className="p-4 border-b border-border">
+            <h2 className="text-base font-semibold flex items-center gap-2">
+              <Clock className="w-4 h-4" />
               保存的简历
-            </h3>
+            </h2>
           </div>
           <nav className="flex-1 overflow-y-auto p-2 space-y-1">
             {savedResumes.map((r) => (
@@ -81,6 +54,14 @@ export function Sidebar({
             ))}
           </nav>
         </>
+      )}
+
+      {savedResumes.length === 0 && (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <p className="text-xs text-muted-foreground text-center">
+            还没有保存的简历<br />和 AI 对话来制作一份吧
+          </p>
+        </div>
       )}
 
       <div className="p-3 border-t border-border">

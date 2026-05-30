@@ -10,13 +10,10 @@ import { ToastContainer, toast } from "@/components/Toast"
 import type { ChatMessage as ChatMessageType } from "@/adapter/ChatAdapter"
 import type { TemplateDefinition } from "@/types/template"
 import type { ResumeData } from "@/types/resume"
-import type { SavedResume } from "@/env"
 
-const DEFAULT_TEMPLATES = [
-  { name: "general", label: "通用简历" },
-  { name: "technical", label: "技术岗位" },
-  { name: "management", label: "管理岗位" },
-]
+import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
+import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
+import { applyStyleToPreferences } from "@/adapter/style-applier"
 
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light")
@@ -25,8 +22,6 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [currentModel, setCurrentModel] = useState("big-pickle")
   const [models, setModels] = useState<string[]>([])
-  const [activeTemplate, setActiveTemplate] = useState<string | null>(null)
-  const [templates] = useState(DEFAULT_TEMPLATES)
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem("welcome-done"))
   const [templateData, setTemplateData] = useState<TemplateDefinition | null>(null)
   const [streamingContent, setStreamingContent] = useState("")
@@ -34,10 +29,16 @@ function App() {
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
-  const jsonInputRef = useRef<HTMLInputElement>(null)
+  const [currentUser, setCurrentUser] = useState<string | null>(null)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [viewMode, setViewMode] = useState<"chat" | "preview">("chat")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const charBufferRef = useRef("")
   const thinkBufferRef = useRef("")
+
+  const currentUserRef = useRef(currentUser)
+  currentUserRef.current = currentUser
+  const startupDoneRef = useRef(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -51,7 +52,36 @@ function App() {
     loadSavedResumes()
     window.electronAPI.getModels().then(setModels).catch(() => setModels(["big-pickle"]))
     window.electronAPI.getCurrentModel().then(setCurrentModel).catch(() => {})
+    discoverUsers()
   }, [])
+
+  const discoverUsers = async () => {
+    try {
+      const list = await window.electronAPI.listUsers()
+      const userName = list.length > 0 ? list[0] : "default"
+      setCurrentUser(userName)
+      const profile = await window.electronAPI.loadProfile(userName)
+      setUserProfile(profile)
+    } catch { /* ignore */ }
+  }
+
+  const initChatContext = useCallback(async (userId: string) => {
+    const profile = await window.electronAPI.loadProfile(userId)
+    setUserProfile(profile)
+    const context = buildResumeContext(profile)
+    await window.electronAPI.setChatContext(context)
+  }, [])
+
+  useEffect(() => {
+    if (currentUser && !startupDoneRef.current) {
+      startupDoneRef.current = true
+      const doStartup = async () => {
+        await initChatContext(currentUser)
+        triggerFirstMessage()
+      }
+      doStartup()
+    }
+  }, [currentUser])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,6 +105,15 @@ function App() {
     } catch { /* ignore */ }
   }
 
+  const loadPreferences = async (userId: string): Promise<UserPreferences> => {
+    try {
+      const prefs = await window.electronAPI.loadPreferences(userId)
+      return prefs
+    } catch {
+      return { template: "general", accentColor: "#1a56db", fontFamily: "system", fontSize: "13", layout: "standard" }
+    }
+  }
+
   const handleDismissWelcome = () => {
     setShowWelcome(false)
     localStorage.setItem("welcome-done", "1")
@@ -86,7 +125,22 @@ function App() {
     try {
       const parsed = JSON.parse(jsonBlock[1])
       if (parsed?.template && parsed?.sections) {
+        if (parsed.template === "technical" || parsed.template === "management") {
+          parsed.template = "general"
+        }
         return parsed as ResumeData
+      }
+    } catch { /* ignore */ }
+    return null
+  }, [])
+
+  const tryDetectStyleJSON = useCallback((reply: string) => {
+    const jsonBlock = reply.match(/```json\n?([\s\S]*?)\n?```/)
+    if (!jsonBlock) return null
+    try {
+      const parsed = JSON.parse(jsonBlock[1])
+      if (parsed?.layoutStyle && parsed?.description) {
+        return parsed
       }
     } catch { /* ignore */ }
     return null
@@ -100,8 +154,48 @@ function App() {
     } catch { /* ignore */ }
   }, [])
 
-  const handleSend = useCallback(async (text: string) => {
-    setMessages((prev) => [...prev, { role: "user", content: text }])
+  const handleAfterDone = useCallback(async (content: string, thinking: string) => {
+    setStreamingContent("")
+    setStreamingThinking("")
+    setLoading(false)
+
+    const detected = tryDetectResumeJSON(content)
+    if (detected) {
+      setResumeData(detected)
+      setViewMode("preview")
+      setActiveResumeId(null)
+      autoSaveResume(detected)
+      const tmpl = await window.electronAPI.getTemplate(detected.template)
+      if (tmpl) setTemplateData(tmpl)
+
+      const user = currentUserRef.current
+      if (user) {
+        await window.electronAPI.saveProfile(user, detected)
+        const newContext = buildResumeContext({
+          name: detected.sections?.personal?.name,
+          sections: detected.sections,
+          updatedAt: new Date().toISOString()
+        })
+        await window.electronAPI.setChatContext(newContext)
+      }
+    }
+
+    setMessages((prev) => [...prev, { role: "assistant", content, thinking }])
+
+    const user = currentUserRef.current
+    if (user) {
+      const styleJson = tryDetectStyleJSON(content)
+      if (styleJson) {
+        loadPreferences(user).then((prefs) => {
+          const updated = applyStyleToPreferences(styleJson, prefs)
+          window.electronAPI.savePreferences(user, updated)
+          toast("success", `已套用分析到的视觉风格: ${styleJson.description}`)
+        })
+      }
+    }
+  }, [tryDetectResumeJSON, tryDetectStyleJSON, autoSaveResume])
+
+  const streamResponse = useCallback(async (text: string, isFirstMessage: boolean) => {
     setLoading(true)
     setStreamingContent("")
     setStreamingThinking("")
@@ -110,8 +204,10 @@ function App() {
     thinkBufferRef.current = ""
 
     window.electronAPI.removeChatListeners()
-    // Strip echoed user input prefix
-    const stripped = (s: string) => s.startsWith(text) ? s.slice(text.length) : s
+
+    const stripped = isFirstMessage
+      ? (s: string) => s
+      : (s: string) => s.startsWith(text) ? s.slice(text.length) : s
 
     window.electronAPI.onChatChunk((chunk) => {
       if (chunk.type === "text") {
@@ -125,25 +221,16 @@ function App() {
         const raw = chunk.content || charBufferRef.current || "(无回复)"
         const content = stripped(raw)
         const thinking = chunk.thinking || thinkBufferRef.current || ""
-        setMessages((prev) => {
-          const updated = [...prev, { role: "assistant" as const, content, thinking }]
-          const detected = tryDetectResumeJSON(content)
-          if (detected) {
-            setResumeData(detected)
-            setActiveResumeId(null)
-            autoSaveResume(detected)
-            loadTemplateFromName(detected.template)
-          }
-          return updated
-        })
-        setStreamingContent("")
-        setStreamingThinking("")
-        setLoading(false)
+        handleAfterDone(content, thinking)
       }
     })
 
     try {
-      await window.electronAPI.sendMessage(text)
+      if (isFirstMessage) {
+        await window.electronAPI.sendFirstMessage(text)
+      } else {
+        await window.electronAPI.sendMessage(text)
+      }
     } catch (err) {
       window.electronAPI.removeChatListeners()
       setMessages((prev) => [
@@ -154,20 +241,33 @@ function App() {
       setStreamingThinking("")
       setLoading(false)
     }
-  }, [tryDetectResumeJSON, autoSaveResume])
+  }, [handleAfterDone])
 
-  const loadTemplateFromName = async (name: string) => {
-    setActiveTemplate(name)
-    const data = await window.electronAPI.getTemplate(name)
-    if (data) setTemplateData(data)
-  }
+  const handleSend = useCallback(async (text: string) => {
+    setMessages((prev) => [...prev, { role: "user", content: text }])
+    await streamResponse(text, false)
+  }, [streamResponse])
+
+  const sendFirstMessage = useCallback(async (prompt: string) => {
+    await streamResponse(prompt, true)
+  }, [streamResponse])
+
+  const triggerFirstMessage = useCallback(async () => {
+    const user = currentUserRef.current
+    if (!user) return
+    const profile = await window.electronAPI.loadProfile(user)
+    setUserProfile(profile)
+    const prompt = buildFirstMessagePrompt(profile)
+    await sendFirstMessage(prompt)
+  }, [sendFirstMessage])
 
   const handleSelectResume = async (id: string) => {
     const saved = savedResumes.find((r) => r.id === id)
     if (!saved) return
     setActiveResumeId(id)
     setResumeData(saved.data)
-    await loadTemplateFromName(saved.templateName)
+    const tmpl = await window.electronAPI.getTemplate(saved.templateName)
+    if (tmpl) setTemplateData(tmpl)
     setMessages([])
   }
 
@@ -182,31 +282,6 @@ function App() {
     } catch { /* ignore */ }
   }
 
-  const handleImportJSON = () => {
-    jsonInputRef.current?.click()
-  }
-
-  const handleJSONFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    try {
-      const text = await file.text()
-      const parsed = JSON.parse(text) as ResumeData
-      if (!parsed.template || !parsed.sections) {
-        toast("error", "JSON 格式不正确")
-        return
-      }
-      setResumeData(parsed)
-      setActiveResumeId(null)
-      await loadTemplateFromName(parsed.template)
-      await autoSaveResume(parsed)
-      toast("success", "已导入简历数据")
-    } catch {
-      toast("error", "JSON 解析失败")
-    }
-    e.target.value = ""
-  }
-
   const handleSelectModel = async (model: string) => {
     setCurrentModel(model)
     await window.electronAPI.setModel(model)
@@ -219,20 +294,34 @@ function App() {
     setActiveResumeId(null)
     setStreamingContent("")
     setStreamingThinking("")
+    triggerFirstMessage()
   }
 
-  const handleSelectTemplate = async (name: string) => {
-    setActiveTemplate(name)
-    const data = await window.electronAPI.getTemplate(name)
-    setTemplateData(data)
-    handleNewChat()
-  }
-
-  const handleAnalyzeResume = async (text: string) => {
+  const handleAnalyzeResume = async (file: File) => {
     setMessages([])
     setResumeData(null)
     setActiveResumeId(null)
-    handleSend(`请分析以下简历内容并给出优化建议。\n\n简历内容：\n${text}`)
+
+    const isPdf = file.name.endsWith(".pdf")
+
+    if (isPdf) {
+      try {
+        const style = await window.electronAPI.extractPdfStyle(file.path)
+        if (style?.error) {
+          toast("error", `PDF 解析失败: ${style.error}`)
+          return
+        }
+        const stylePrompt = buildStyleAnalysisPrompt(style)
+        const allText = style.items?.map((i: any) => i.text).join("\n") || ""
+        handleSend(`这是一份 PDF 简历的提取内容。\n\n简历文本：\n${allText}\n\n另外，请分析它的视觉风格：\n${stylePrompt}\n\n请先分析内容并给出优化建议，然后分析视觉风格，输出 JSON 格式的风格参数。`)
+        toast("info", `已提取 ${style.items?.length || 0} 个文本项`)
+      } catch (err: any) {
+        toast("error", `PDF 提取失败: ${err.message}`)
+      }
+    } else {
+      const text = await file.text()
+      handleSend(`请分析以下简历内容并给出优化建议。\n\n简历内容：\n${text}`)
+    }
   }
 
   const handleExportPDF = async () => {
@@ -258,18 +347,9 @@ function App() {
     toast("info", "已选择文件")
   }
 
-  const SUGGESTIONS = [
-    "我想找一份前端开发的工作",
-    "我正在找管理岗位",
-    "帮我优化一下简历",
-  ]
-
   return (
     <div className="flex h-screen bg-background text-foreground">
       <Sidebar
-        templates={templates}
-        activeTemplate={activeTemplate}
-        onSelectTemplate={handleSelectTemplate}
         onOpenSettings={() => setSettingsOpen(true)}
         savedResumes={savedResumes}
         activeResumeId={activeResumeId}
@@ -281,30 +361,26 @@ function App() {
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">AI 简历助手</h1>
+            {currentUser && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-muted-foreground">
+                {currentUser}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <input
-              ref={jsonInputRef}
-              type="file"
-              accept=".json"
-              onChange={handleJSONFileChange}
-              className="hidden"
-            />
-            {!resumeData && (
-              <button
-                onClick={handleImportJSON}
-                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
-              >
-                导入 JSON
-              </button>
-            )}
             {resumeData && (
               <>
+                <button
+                  onClick={() => setViewMode(viewMode === "preview" ? "chat" : "preview")}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
+                >
+                  {viewMode === "preview" ? "继续对话修改" : "查看简历预览"}
+                </button>
                 <button
                   onClick={handleNewChat}
                   className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
                 >
-                  开始新对话
+                  新对话
                 </button>
                 <button
                   onClick={handleExportPDF}
@@ -317,31 +393,29 @@ function App() {
           </div>
         </header>
 
-        {resumeData && templateData ? (
+        {resumeData && templateData && viewMode === "preview" ? (
           <div className="flex-1 overflow-y-auto">
             <ResumePreview data={resumeData} template={templateData} />
           </div>
         ) : (
           <>
-            <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleAnalyzeResume} />
+            {!resumeData && (
+              <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleAnalyzeResume} />
+            )}
+
+            {resumeData && templateData && viewMode === "chat" && (
+              <div className="px-4 py-2 border-b border-border bg-accent/30">
+                <p className="text-xs text-muted-foreground">
+                  简历数据已生成，你可以继续对话修改它，或点击上方"查看简历预览"查看效果。
+                </p>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
               {messages.length === 0 && !loading ? (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
                   <p className="text-lg">欢迎使用 AI 简历助手</p>
-                  <p className="text-sm">选择左侧模板，或直接开始对话</p>
-                  <div className="flex flex-col gap-2 mt-4">
-                    {SUGGESTIONS.map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => handleSend(s)}
-                        disabled={loading}
-                        className="px-4 py-2 rounded-lg border border-border text-sm hover:bg-accent hover:border-muted-foreground transition-all disabled:opacity-50"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="text-sm">AI 正在准备中，请稍候...</p>
                 </div>
               ) : (
                 <div className="max-w-4xl mx-auto py-4">

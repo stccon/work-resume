@@ -179,9 +179,20 @@ async function streamFromGlobalEvents(
   }
 }
 
+let conversationContext = ""
+
+export function setConversationContext(ctx: string) {
+  conversationContext = ctx
+}
+
+export function clearConversationContext() {
+  conversationContext = ""
+}
+
 export async function sendPrompt(
   text: string,
-  win?: BrowserWindow | null
+  win?: BrowserWindow | null,
+  asFirstMessage = false
 ): Promise<{ content: string; thinking: string }> {
   const c = await getClient()
   const sid = await ensureSession()
@@ -192,12 +203,17 @@ export async function sendPrompt(
     streamFromGlobalEvents(sid, win, abortController.signal)
   }
 
+  const prefix = asFirstMessage ? "" : "用户消息: "
+  const fullText = conversationContext
+    ? `${conversationContext}\n\n${prefix}${text}`
+    : text
+
   try {
     const result = await Promise.race([
       c.session.prompt({
         path: { id: sid },
         body: {
-          parts: [{ type: "text", text }],
+          parts: [{ type: "text", text: fullText }],
           model: { providerID: "opencode", modelID: currentModel },
         },
       }),

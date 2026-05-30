@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { MessageSquare, FileText, Upload, Wand2 } from "lucide-react"
+import { MessageSquare, FileText, Wand2, Upload } from "lucide-react"
 
 interface WelcomeGuideProps {
   onDismiss: () => void
@@ -7,24 +7,24 @@ interface WelcomeGuideProps {
 
 const STEPS = [
   {
-    icon: FileText,
-    title: "选择模板",
-    description: "从左侧选择一个简历模板，AI 会根据模板内容主动问你问题。",
-  },
-  {
     icon: MessageSquare,
     title: "和 AI 对话",
-    description: "回答 AI 的问题，也可以随时告诉 AI 你想补充的内容。",
+    description: "AI 会主动问候你，引导你一步步完成简历。你只需要回答就好。",
   },
   {
-    icon: Wand2,
+    icon: FileText,
     title: "生成简历",
     description: "信息收集完整后，AI 会帮你生成结构完整的简历。",
   },
   {
+    icon: Wand2,
+    title: "继续优化",
+    description: "不满意可以继续对话修改，反复优化直到满意为止。",
+  },
+  {
     icon: Upload,
-    title: "上传优化",
-    description: "也可以上传已有简历，让 AI 帮你分析和优化。",
+    title: "上传已有简历",
+    description: "也可以上传现有简历，让 AI 帮你分析和优化。",
   },
 ]
 

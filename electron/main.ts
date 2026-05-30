@@ -1,8 +1,30 @@
 import { app, BrowserWindow } from "electron"
 import path from "path"
+import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
+import { getTemplatesDir, getResumesDir, getUserdataDir } from "./paths"
+import { migrateLegacyData } from "./migration"
 
 let mainWindow: BrowserWindow | null = null
+
+function ensureDirectories() {
+  getTemplatesDir()
+  getResumesDir()
+  getUserdataDir()
+
+  const devTemplates = path.join(__dirname, "..", "templates")
+  if (fs.existsSync(devTemplates)) {
+    const targetDir = getTemplatesDir()
+    for (const file of fs.readdirSync(devTemplates)) {
+      if (file.endsWith(".json")) {
+        const dest = path.join(targetDir, file)
+        if (!fs.existsSync(dest)) {
+          fs.copyFileSync(path.join(devTemplates, file), dest)
+        }
+      }
+    }
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -48,6 +70,8 @@ process.on("unhandledRejection", (err) => {
 })
 
 app.whenReady().then(async () => {
+  ensureDirectories()
+  migrateLegacyData()
   setupIPC()
   await initOpencode()
   createWindow()

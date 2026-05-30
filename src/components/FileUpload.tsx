@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 interface FileUploadProps {
   onFileSelected: (file: File) => void
-  onAnalyze: (text: string) => void
+  onAnalyze: (file: File) => void
 }
 
 export function FileUpload({ onFileSelected, onAnalyze }: FileUploadProps) {
@@ -38,8 +38,7 @@ export function FileUpload({ onFileSelected, onAnalyze }: FileUploadProps) {
   const handleAnalyze = async () => {
     if (!file) return
     setAnalyzing(true)
-    const text = await file.text()
-    onAnalyze(text)
+    onAnalyze(file)
     setAnalyzing(false)
   }
 

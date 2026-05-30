@@ -1,7 +1,18 @@
 import { ipcMain, BrowserWindow, dialog } from "electron"
-import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isMockMode } from "./opencode"
+import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isMockMode, setConversationContext, clearConversationContext } from "./opencode"
 import path from "path"
 import fs from "fs"
+import {
+  getTemplatesDir,
+  getResumesDir,
+  getUserDir,
+  getUserProfilePath,
+  getUserConversationsDir,
+  getUserPreferencesPath,
+  getUserResumeDraftPath,
+  listUsers,
+  generateResumeFileName,
+} from "./paths"
 
 const Store = require("electron-store")
 const store = new Store({ encryptionKey: "resume-ai-local" })
@@ -21,6 +32,19 @@ function getResumes(): SavedResume[] {
 
 function saveResumes(resumes: SavedResume[]) {
   store.set("resumes", resumes)
+}
+
+function readJSONSafe(filePath: string): any | null {
+  try {
+    if (!fs.existsSync(filePath)) return null
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"))
+  } catch { return null }
+}
+
+function writeJSONSafe(filePath: string, data: any): void {
+  const dir = path.dirname(filePath)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8")
 }
 
 function generateHTML(data: any, template: any): string {
@@ -80,6 +104,15 @@ function generateHTML(data: any, template: any): string {
 </body></html>`
 }
 
+function readTemplateJSON(name: string): any | null {
+  const templatesDir = getTemplatesDir()
+  for (const ext of ["", ".json"]) {
+    const p = path.join(templatesDir, `${name}${ext}`)
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, "utf-8"))
+  }
+  return null
+}
+
 export function setupIPC() {
   ipcMain.handle("chat:send", async (event, text: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
@@ -90,6 +123,25 @@ export function setupIPC() {
       console.error("chat:send error:", err)
       return { content: `（错误）${err.message || String(err)}`, thinking: "" }
     }
+  })
+
+  ipcMain.handle("chat:send-first-message", async (event, prompt: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    try {
+      const result = await sendPrompt(prompt, win, true)
+      return result
+    } catch (err: any) {
+      console.error("chat:send-first-message error:", err)
+      return { content: `（错误）${err.message || String(err)}`, thinking: "" }
+    }
+  })
+
+  ipcMain.handle("chat:set-context", async (_event, context: string) => {
+    setConversationContext(context)
+  })
+
+  ipcMain.handle("chat:clear-context", async () => {
+    clearConversationContext()
   })
 
   ipcMain.handle("models:list", async () => {
@@ -118,7 +170,7 @@ export function setupIPC() {
   })
 
   ipcMain.handle("templates:list", async () => {
-    const templatesDir = path.join(__dirname, "../templates")
+    const templatesDir = getTemplatesDir()
     if (!fs.existsSync(templatesDir)) return []
     const files = fs.readdirSync(templatesDir).filter((f: string) => f.endsWith(".json"))
     return files.map((f: string) => {
@@ -128,10 +180,76 @@ export function setupIPC() {
   })
 
   ipcMain.handle("templates:get", async (_event, name: string) => {
-    const filePath = path.join(__dirname, "../templates", `${name}.json`)
-    if (!fs.existsSync(filePath)) return null
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"))
+    return readTemplateJSON(name)
   })
+
+  // ── User Management ──
+
+  ipcMain.handle("user:list", async () => {
+    return listUsers()
+  })
+
+  ipcMain.handle("user:profile-load", async (_event, userId: string) => {
+    return readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null }
+  })
+
+  ipcMain.handle("user:profile-save", async (_event, userId: string, data: any) => {
+    const profile = readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null }
+    profile.sections = data.sections || profile.sections
+    profile.name = data.sections?.personal?.name || profile.name
+    profile.updatedAt = new Date().toISOString()
+    writeJSONSafe(getUserProfilePath(userId), profile)
+    return profile
+  })
+
+  ipcMain.handle("user:preferences-load", async (_event, userId: string) => {
+    return readJSONSafe(getUserPreferencesPath(userId)) || {
+      template: "general",
+      accentColor: "#2563eb",
+      fontFamily: "system",
+      fontSize: "medium",
+      layout: "single",
+    }
+  })
+
+  ipcMain.handle("user:preferences-save", async (_event, userId: string, prefs: any) => {
+    writeJSONSafe(getUserPreferencesPath(userId), prefs)
+    return prefs
+  })
+
+  ipcMain.handle("user:conversation-save", async (_event, userId: string, messages: any[]) => {
+    const date = new Date().toISOString().slice(0, 10)
+    const convDir = getUserConversationsDir(userId)
+    const filePath = path.join(convDir, `${date}.json`)
+    const existing = readJSONSafe(filePath) || { date, userId, messages: [] }
+    existing.messages = messages
+    existing.updatedAt = new Date().toISOString()
+    writeJSONSafe(filePath, existing)
+    return existing
+  })
+
+  ipcMain.handle("user:conversation-list", async (_event, userId: string) => {
+    const convDir = getUserConversationsDir(userId)
+    if (!fs.existsSync(convDir)) return []
+    return fs.readdirSync(convDir)
+      .filter((f: string) => f.endsWith(".json"))
+      .map((f: string) => {
+        const data = readJSONSafe(path.join(convDir, f))
+        return { date: f.replace(".json", ""), messageCount: data?.messages?.length || 0, updatedAt: data?.updatedAt || "" }
+      })
+      .sort((a, b) => b.date.localeCompare(a.date))
+  })
+
+  ipcMain.handle("user:draft-save", async (_event, userId: string, data: any) => {
+    writeJSONSafe(getUserResumeDraftPath(userId), data)
+    return data
+  })
+
+  ipcMain.handle("user:draft-load", async (_event, userId: string) => {
+    return readJSONSafe(getUserResumeDraftPath(userId))
+  })
+
+  // ── Resume Save / Load (legacy store + file) ──
 
   ipcMain.handle("resume:save", async (_event, data: any, template: any) => {
     const resumes = getResumes()
@@ -147,6 +265,17 @@ export function setupIPC() {
     }
     resumes.unshift(entry)
     saveResumes(resumes.slice(0, 50))
+
+    // Also save to userdata/profile.json if we have a user context
+    const userName = data?.sections?.personal?.name
+    if (userName) {
+      const profile = readJSONSafe(getUserProfilePath(userName)) || { sections: {}, updatedAt: null }
+      profile.sections = data.sections || profile.sections
+      profile.name = userName
+      profile.updatedAt = new Date().toISOString()
+      writeJSONSafe(getUserProfilePath(userName), profile)
+    }
+
     return entry
   })
 
@@ -188,9 +317,12 @@ export function setupIPC() {
           })
 
           const name = data?.sections?.personal?.name || "简历"
+          const tmplLabel = template?.label || "简历"
+          const defaultName = generateResumeFileName(name, tmplLabel)
+
           const result = await dialog.showSaveDialog(win, {
             title: "导出简历",
-            defaultPath: `${name}_简历.pdf`,
+            defaultPath: defaultName,
             filters: [{ name: "PDF", extensions: ["pdf"] }],
           })
 
@@ -201,6 +333,14 @@ export function setupIPC() {
           }
 
           fs.writeFileSync(result.filePath, pdfBuffer)
+
+          // Also save a copy to resumes/ directory
+          try {
+            const resumesDir = getResumesDir()
+            const copyPath = path.join(resumesDir, path.basename(result.filePath))
+            fs.writeFileSync(copyPath, pdfBuffer)
+          } catch { /* ignore copy failure */ }
+
           cleanup()
           resolve({ success: true, path: result.filePath })
         } catch (err: any) {
@@ -217,18 +357,56 @@ export function setupIPC() {
       win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
     })
   })
+
+  ipcMain.handle("resume:save-pdf-buffer", async (_event, buffer: ArrayBuffer) => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return { success: false, reason: "no_window" }
+
+    const result = await dialog.showSaveDialog(win, {
+      title: "导出简历",
+      filters: [{ name: "PDF", extensions: ["pdf"] }],
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { success: false, reason: "canceled" }
+    }
+
+    fs.writeFileSync(result.filePath, Buffer.from(buffer))
+
+    try {
+      const resumesDir = getResumesDir()
+      const copyPath = path.join(resumesDir, path.basename(result.filePath))
+      fs.writeFileSync(copyPath, Buffer.from(buffer))
+    } catch { /* ignore copy failure */ }
+
+    return { success: true, path: result.filePath }
+  })
+
+  ipcMain.handle("pdf:extract-style", async (_event, filePath: string) => {
+    try {
+      const { extractPdfStyle } = await import("./pdf-extractor")
+      return await extractPdfStyle(filePath)
+    } catch (err: any) {
+      console.error("PDF extraction error:", err)
+      return { error: err.message || String(err) }
+    }
+  })
 }
 
 export async function initOpencode() {
-  await startOpencode()
-  if (isMockMode()) {
-    console.log("Running in mock mode (opencode SDK not available)")
-  } else {
-    const savedModel = store.get("currentModel")
-    if (savedModel) {
-      setModel(savedModel)
-      console.log("Restored model:", savedModel)
+  try {
+    await startOpencode()
+    if (isMockMode()) {
+      console.log("Running in mock mode (opencode SDK not available)")
+    } else {
+      const savedModel = store.get("currentModel")
+      if (savedModel) {
+        setModel(savedModel)
+        console.log("Restored model:", savedModel)
+      }
+      console.log("Opencode initialized")
     }
-    console.log("Opencode initialized")
+  } catch (err: any) {
+    console.warn("Opencode failed to start, entering mock mode:", err.message || err)
   }
 }
