@@ -125,6 +125,7 @@ async function streamFromGlobalEvents(
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buf = ""
+    let currentPartType = ""
 
     while (true) {
       const { done, value } = await reader.read()
@@ -151,17 +152,18 @@ async function streamFromGlobalEvents(
             const sessionMatch = props.sessionID || props?.part?.sessionID || ""
             if (sessionMatch !== sid) { eventType = ""; continue }
 
-            // Extract text: delta (incremental) > text (final) > part.text (v1)
+            const pType = payload.type || eventType
+
+            if (props?.part?.type) currentPartType = props.part.type
+
             const text = props.delta || props.text || props?.part?.text || ""
             if (!text) { eventType = ""; continue }
 
-            const pType = payload.type || eventType
-
             const isText = pType.includes("text") ||
-              (pType === "message.part.delta" && props.field === "text") ||
+              (pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning") ||
               (pType === "message.part.updated" && props?.part?.type === "text")
             const isReason = pType.includes("reason") ||
-              (pType === "message.part.delta" && props.field === "reasoning") ||
+              (pType === "message.part.delta" && (props.field === "reasoning" || (props.field === "text" && currentPartType === "reasoning"))) ||
               (pType === "message.part.updated" && props?.part?.type === "reasoning")
 
             if (isText) {

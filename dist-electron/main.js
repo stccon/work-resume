@@ -118,7 +118,7 @@ async function ensureSession() {
   return sessionId;
 }
 async function streamFromGlobalEvents(sid, win, signal) {
-  var _a, _b, _c, _d;
+  var _a, _b, _c, _d, _e;
   if (!serverUrl) return;
   try {
     const res = await fetch(`${serverUrl}/global/event`, { signal });
@@ -126,6 +126,7 @@ async function streamFromGlobalEvents(sid, win, signal) {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
+    let currentPartType = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -152,14 +153,15 @@ async function streamFromGlobalEvents(sid, win, signal) {
               eventType = "";
               continue;
             }
-            const text = props.delta || props.text || ((_b = props == null ? void 0 : props.part) == null ? void 0 : _b.text) || "";
+            const pType = payload.type || eventType;
+            if ((_b = props == null ? void 0 : props.part) == null ? void 0 : _b.type) currentPartType = props.part.type;
+            const text = props.delta || props.text || ((_c = props == null ? void 0 : props.part) == null ? void 0 : _c.text) || "";
             if (!text) {
               eventType = "";
               continue;
             }
-            const pType = payload.type || eventType;
-            const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" || pType === "message.part.updated" && ((_c = props == null ? void 0 : props.part) == null ? void 0 : _c.type) === "text";
-            const isReason = pType.includes("reason") || pType === "message.part.delta" && props.field === "reasoning" || pType === "message.part.updated" && ((_d = props == null ? void 0 : props.part) == null ? void 0 : _d.type) === "reasoning";
+            const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning" || pType === "message.part.updated" && ((_d = props == null ? void 0 : props.part) == null ? void 0 : _d.type) === "text";
+            const isReason = pType.includes("reason") || pType === "message.part.delta" && (props.field === "reasoning" || props.field === "text" && currentPartType === "reasoning") || pType === "message.part.updated" && ((_e = props == null ? void 0 : props.part) == null ? void 0 : _e.type) === "reasoning";
             if (isText) {
               win.webContents.send("chat:chunk", { type: "text", text });
             } else if (isReason) {
