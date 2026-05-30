@@ -40,7 +40,7 @@ export function ChatMessage({ role, content, thinking }: ChatMessageProps) {
               思考过程
             </button>
             {showThinking && (
-              <div className="mt-1 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground border border-border">
+              <div className="mt-1 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground border border-border whitespace-pre-wrap">
                 {thinking}
               </div>
             )}

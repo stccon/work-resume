@@ -118,7 +118,7 @@ async function ensureSession() {
   return sessionId;
 }
 async function streamFromGlobalEvents(sid, win, signal) {
-  var _a, _b, _c, _d, _e;
+  var _a, _b, _c;
   if (!serverUrl) return;
   try {
     const res = await fetch(`${serverUrl}/global/event`, { signal });
@@ -160,8 +160,8 @@ async function streamFromGlobalEvents(sid, win, signal) {
               eventType = "";
               continue;
             }
-            const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning" || pType === "message.part.updated" && ((_d = props == null ? void 0 : props.part) == null ? void 0 : _d.type) === "text";
-            const isReason = pType.includes("reason") || pType === "message.part.delta" && (props.field === "reasoning" || props.field === "text" && currentPartType === "reasoning") || pType === "message.part.updated" && ((_e = props == null ? void 0 : props.part) == null ? void 0 : _e.type) === "reasoning";
+            const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning";
+            const isReason = pType.includes("reason") || pType === "message.part.delta" && (props.field === "reasoning" || props.field === "text" && currentPartType === "reasoning");
             if (isText) {
               win.webContents.send("chat:chunk", { type: "text", text });
             } else if (isReason) {

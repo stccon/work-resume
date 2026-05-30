@@ -160,11 +160,9 @@ async function streamFromGlobalEvents(
             if (!text) { eventType = ""; continue }
 
             const isText = pType.includes("text") ||
-              (pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning") ||
-              (pType === "message.part.updated" && props?.part?.type === "text")
+              (pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning")
             const isReason = pType.includes("reason") ||
-              (pType === "message.part.delta" && (props.field === "reasoning" || (props.field === "text" && currentPartType === "reasoning"))) ||
-              (pType === "message.part.updated" && props?.part?.type === "reasoning")
+              (pType === "message.part.delta" && (props.field === "reasoning" || (props.field === "text" && currentPartType === "reasoning")))
 
             if (isText) {
               win.webContents.send("chat:chunk", { type: "text", text })
