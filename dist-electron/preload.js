@@ -15,6 +15,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   listResumes: () => electron.ipcRenderer.invoke("resume:list"),
   getResume: (id) => electron.ipcRenderer.invoke("resume:get", id),
   deleteResume: (id) => electron.ipcRenderer.invoke("resume:delete", id),
+  updateResume: (id, data, template) => electron.ipcRenderer.invoke("resume:update", id, data, template),
   exportPDF: (data, template) => electron.ipcRenderer.invoke("resume:export-pdf", data, template),
   savePdfBuffer: (buffer) => electron.ipcRenderer.invoke("resume:save-pdf-buffer", buffer),
   onChatChunk: (callback) => {
@@ -23,15 +24,6 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   removeChatListeners: () => {
     electron.ipcRenderer.removeAllListeners("chat:chunk");
   },
-  listUsers: () => electron.ipcRenderer.invoke("user:list"),
-  loadProfile: (userId) => electron.ipcRenderer.invoke("user:profile-load", userId),
-  saveProfile: (userId, data) => electron.ipcRenderer.invoke("user:profile-save", userId, data),
-  loadPreferences: (userId) => electron.ipcRenderer.invoke("user:preferences-load", userId),
-  savePreferences: (userId, prefs) => electron.ipcRenderer.invoke("user:preferences-save", userId, prefs),
-  saveConversation: (userId, messages) => electron.ipcRenderer.invoke("user:conversation-save", userId, messages),
-  listConversations: (userId) => electron.ipcRenderer.invoke("user:conversation-list", userId),
-  saveDraft: (userId, data) => electron.ipcRenderer.invoke("user:draft-save", userId, data),
-  loadDraft: (userId) => electron.ipcRenderer.invoke("user:draft-load", userId),
   setChatContext: (context) => electron.ipcRenderer.invoke("chat:set-context", context),
   clearChatContext: () => electron.ipcRenderer.invoke("chat:clear-context"),
   extractPdfStyle: (filePath) => electron.ipcRenderer.invoke("pdf:extract-style", filePath)

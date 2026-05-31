@@ -5,12 +5,6 @@ import fs from "fs"
 import {
   getTemplatesDir,
   getResumesDir,
-  getUserDir,
-  getUserProfilePath,
-  getUserConversationsDir,
-  getUserPreferencesPath,
-  getUserResumeDraftPath,
-  listUsers,
   generateResumeFileName,
 } from "./paths"
 
@@ -183,73 +177,7 @@ export function setupIPC() {
     return readTemplateJSON(name)
   })
 
-  // ── User Management ──
-
-  ipcMain.handle("user:list", async () => {
-    return listUsers()
-  })
-
-  ipcMain.handle("user:profile-load", async (_event, userId: string) => {
-    return readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null }
-  })
-
-  ipcMain.handle("user:profile-save", async (_event, userId: string, data: any) => {
-    const profile = readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null }
-    profile.sections = data.sections || profile.sections
-    profile.name = data.sections?.personal?.name || profile.name
-    profile.updatedAt = new Date().toISOString()
-    writeJSONSafe(getUserProfilePath(userId), profile)
-    return profile
-  })
-
-  ipcMain.handle("user:preferences-load", async (_event, userId: string) => {
-    return readJSONSafe(getUserPreferencesPath(userId)) || {
-      template: "general",
-      accentColor: "#2563eb",
-      fontFamily: "system",
-      fontSize: "medium",
-      layout: "single",
-    }
-  })
-
-  ipcMain.handle("user:preferences-save", async (_event, userId: string, prefs: any) => {
-    writeJSONSafe(getUserPreferencesPath(userId), prefs)
-    return prefs
-  })
-
-  ipcMain.handle("user:conversation-save", async (_event, userId: string, messages: any[]) => {
-    const date = new Date().toISOString().slice(0, 10)
-    const convDir = getUserConversationsDir(userId)
-    const filePath = path.join(convDir, `${date}.json`)
-    const existing = readJSONSafe(filePath) || { date, userId, messages: [] }
-    existing.messages = messages
-    existing.updatedAt = new Date().toISOString()
-    writeJSONSafe(filePath, existing)
-    return existing
-  })
-
-  ipcMain.handle("user:conversation-list", async (_event, userId: string) => {
-    const convDir = getUserConversationsDir(userId)
-    if (!fs.existsSync(convDir)) return []
-    return fs.readdirSync(convDir)
-      .filter((f: string) => f.endsWith(".json"))
-      .map((f: string) => {
-        const data = readJSONSafe(path.join(convDir, f))
-        return { date: f.replace(".json", ""), messageCount: data?.messages?.length || 0, updatedAt: data?.updatedAt || "" }
-      })
-      .sort((a, b) => b.date.localeCompare(a.date))
-  })
-
-  ipcMain.handle("user:draft-save", async (_event, userId: string, data: any) => {
-    writeJSONSafe(getUserResumeDraftPath(userId), data)
-    return data
-  })
-
-  ipcMain.handle("user:draft-load", async (_event, userId: string) => {
-    return readJSONSafe(getUserResumeDraftPath(userId))
-  })
-
-  // ── Resume Save / Load (legacy store + file) ──
+  // ── Resume Save / Load ──
 
   ipcMain.handle("resume:save", async (_event, data: any, template: any) => {
     const resumes = getResumes()
@@ -266,17 +194,21 @@ export function setupIPC() {
     resumes.unshift(entry)
     saveResumes(resumes.slice(0, 50))
 
-    // Also save to userdata/profile.json if we have a user context
-    const userName = data?.sections?.personal?.name
-    if (userName) {
-      const profile = readJSONSafe(getUserProfilePath(userName)) || { sections: {}, updatedAt: null }
-      profile.sections = data.sections || profile.sections
-      profile.name = userName
-      profile.updatedAt = new Date().toISOString()
-      writeJSONSafe(getUserProfilePath(userName), profile)
-    }
-
     return entry
+  })
+
+  ipcMain.handle("resume:update", async (_event, id: string, data: any, template?: any) => {
+    const resumes = getResumes()
+    const idx = resumes.findIndex((r: SavedResume) => r.id === id)
+    if (idx === -1) return null
+    const name = data?.sections?.personal?.name || "未命名简历"
+    resumes[idx].data = data
+    resumes[idx].title = `${name} - ${template?.label || resumes[idx].templateLabel || "简历"}`
+    resumes[idx].templateName = template?.name || resumes[idx].templateName
+    resumes[idx].templateLabel = template?.label || resumes[idx].templateLabel
+    resumes[idx].createdAt = new Date().toISOString()
+    saveResumes(resumes)
+    return resumes[idx]
   })
 
   ipcMain.handle("resume:list", async () => {

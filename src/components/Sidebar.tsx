@@ -1,4 +1,4 @@
-import { FileText, Settings, Clock, Trash2 } from "lucide-react"
+import { FileText, Settings, Plus, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 
@@ -8,6 +8,7 @@ interface SidebarProps {
   activeResumeId: string | null
   onSelectResume: (id: string) => void
   onDeleteResume: (id: string) => void
+  onCreateResume: () => void
 }
 
 export function Sidebar({
@@ -16,15 +17,26 @@ export function Sidebar({
   activeResumeId,
   onSelectResume,
   onDeleteResume,
+  onCreateResume,
 }: SidebarProps) {
   return (
     <aside className="w-64 flex flex-col border-r border-border bg-sidebar">
+      <div className="p-3 border-b border-border">
+        <button
+          onClick={onCreateResume}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+        >
+          <Plus className="w-4 h-4" />
+          <span>创建简历</span>
+        </button>
+      </div>
+
       {savedResumes.length > 0 && (
         <>
-          <div className="p-4 border-b border-border">
-            <h2 className="text-base font-semibold flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              保存的简历
+          <div className="px-4 py-2 border-b border-border">
+            <h2 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+              <FileText className="w-4 h-4" />
+              我的简历
             </h2>
           </div>
           <nav className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -59,7 +71,7 @@ export function Sidebar({
       {savedResumes.length === 0 && (
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-xs text-muted-foreground text-center">
-            还没有保存的简历<br />和 AI 对话来制作一份吧
+            还没有简历<br />点击上方按钮创建一份吧
           </p>
         </div>
       )}

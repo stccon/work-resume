@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildFirstMessagePrompt, buildResumeContext } from "@/adapter/distillation"
+import type { ResumeData } from "@/types/resume"
 
 describe("buildFirstMessagePrompt", () => {
   it("should return first-time greeting when profile is empty", () => {
@@ -9,34 +10,32 @@ describe("buildFirstMessagePrompt", () => {
     expect(result).toContain("姓名")
   })
 
-  it("should return first-time greeting when profile has no sections", () => {
-    const profile: UserProfile = { sections: {}, updatedAt: null }
-    const result = buildFirstMessagePrompt(profile)
+  it("should return first-time greeting when resume has no sections", () => {
+    const resume: ResumeData = { template: "general", sections: {} }
+    const result = buildFirstMessagePrompt(resume)
     expect(result).toContain("第一次对话")
   })
 
-  it("should return returning greeting when profile has data", () => {
-    const profile: UserProfile = {
-      name: "张三",
+  it("should return returning greeting when resume has data", () => {
+    const resume: ResumeData = {
+      template: "general",
       sections: {
         personal: { name: "张三", email: "zhang@test.com", title: "前端开发" },
         summary: { summary: "10年前端经验" },
       },
-      updatedAt: "2026-01-01",
     }
-    const result = buildFirstMessagePrompt(profile)
+    const result = buildFirstMessagePrompt(resume)
     expect(result).toContain("张三")
     expect(result).toContain("JSON")
     expect(result).toContain("简历信息")
   })
 
   it("should include user name in greeting when available", () => {
-    const profile: UserProfile = {
-      name: "李四",
+    const resume: ResumeData = {
+      template: "general",
       sections: { personal: { name: "李四" } },
-      updatedAt: null,
     }
-    const result = buildFirstMessagePrompt(profile)
+    const result = buildFirstMessagePrompt(resume)
     expect(result).toContain("李四")
   })
 })
@@ -50,17 +49,17 @@ describe("buildResumeContext", () => {
     expect(result).toContain("教育背景")
   })
 
-  it("should include existing profile data when profile has sections", () => {
-    const profile: UserProfile = {
+  it("should include existing resume data when sections exist", () => {
+    const resume: ResumeData = {
+      template: "general",
       sections: { personal: { name: "张三" } },
-      updatedAt: null,
     }
-    const result = buildResumeContext(profile)
+    const result = buildResumeContext(resume)
     expect(result).toContain("已有简历信息")
     expect(result).toContain("张三")
   })
 
-  it("should indicate first-time when profile is empty", () => {
+  it("should indicate first-time when resume is empty", () => {
     const result = buildResumeContext(null)
     expect(result).toContain("第一次对话")
   })

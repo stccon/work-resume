@@ -264,31 +264,6 @@ function getTemplatesDir() {
 function getResumesDir() {
   return ensureDir(path.join(getBaseDir(), "resumes"));
 }
-function getUserdataDir() {
-  return ensureDir(path.join(getBaseDir(), "userdata"));
-}
-function getUserDir(userId) {
-  return ensureDir(path.join(getUserdataDir(), userId));
-}
-function getUserProfilePath(userId) {
-  return path.join(getUserDir(userId), "profile.json");
-}
-function getUserConversationsDir(userId) {
-  return ensureDir(path.join(getUserDir(userId), "conversations"));
-}
-function getUserPreferencesPath(userId) {
-  return path.join(getUserDir(userId), "preferences.json");
-}
-function getUserResumeDraftPath(userId) {
-  return path.join(getUserDir(userId), "resume-draft.json");
-}
-function listUsers() {
-  const dir = getUserdataDir();
-  return fs.readdirSync(dir).filter((name) => {
-    const sub = path.join(dir, name);
-    return fs.statSync(sub).isDirectory();
-  });
-}
 function generateResumeFileName(userName, templateLabel) {
   const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   return `${userName}_${templateLabel}_${date}.pdf`;
@@ -300,19 +275,6 @@ function getResumes() {
 }
 function saveResumes(resumes) {
   store.set("resumes", resumes);
-}
-function readJSONSafe(filePath) {
-  try {
-    if (!fs.existsSync(filePath)) return null;
-    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-function writeJSONSafe(filePath, data) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 }
 function generateHTML(data, template) {
   var _a, _b, _c, _d, _e, _f, _g, _h;
@@ -424,62 +386,8 @@ function setupIPC() {
   electron.ipcMain.handle("templates:get", async (_event, name) => {
     return readTemplateJSON(name);
   });
-  electron.ipcMain.handle("user:list", async () => {
-    return listUsers();
-  });
-  electron.ipcMain.handle("user:profile-load", async (_event, userId) => {
-    return readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null };
-  });
-  electron.ipcMain.handle("user:profile-save", async (_event, userId, data) => {
-    var _a, _b;
-    const profile = readJSONSafe(getUserProfilePath(userId)) || { sections: {}, updatedAt: null };
-    profile.sections = data.sections || profile.sections;
-    profile.name = ((_b = (_a = data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || profile.name;
-    profile.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    writeJSONSafe(getUserProfilePath(userId), profile);
-    return profile;
-  });
-  electron.ipcMain.handle("user:preferences-load", async (_event, userId) => {
-    return readJSONSafe(getUserPreferencesPath(userId)) || {
-      template: "general",
-      accentColor: "#2563eb",
-      fontFamily: "system",
-      fontSize: "medium",
-      layout: "single"
-    };
-  });
-  electron.ipcMain.handle("user:preferences-save", async (_event, userId, prefs) => {
-    writeJSONSafe(getUserPreferencesPath(userId), prefs);
-    return prefs;
-  });
-  electron.ipcMain.handle("user:conversation-save", async (_event, userId, messages) => {
-    const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-    const convDir = getUserConversationsDir(userId);
-    const filePath = path.join(convDir, `${date}.json`);
-    const existing = readJSONSafe(filePath) || { date, userId, messages: [] };
-    existing.messages = messages;
-    existing.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-    writeJSONSafe(filePath, existing);
-    return existing;
-  });
-  electron.ipcMain.handle("user:conversation-list", async (_event, userId) => {
-    const convDir = getUserConversationsDir(userId);
-    if (!fs.existsSync(convDir)) return [];
-    return fs.readdirSync(convDir).filter((f) => f.endsWith(".json")).map((f) => {
-      var _a;
-      const data = readJSONSafe(path.join(convDir, f));
-      return { date: f.replace(".json", ""), messageCount: ((_a = data == null ? void 0 : data.messages) == null ? void 0 : _a.length) || 0, updatedAt: (data == null ? void 0 : data.updatedAt) || "" };
-    }).sort((a, b) => b.date.localeCompare(a.date));
-  });
-  electron.ipcMain.handle("user:draft-save", async (_event, userId, data) => {
-    writeJSONSafe(getUserResumeDraftPath(userId), data);
-    return data;
-  });
-  electron.ipcMain.handle("user:draft-load", async (_event, userId) => {
-    return readJSONSafe(getUserResumeDraftPath(userId));
-  });
   electron.ipcMain.handle("resume:save", async (_event, data, template) => {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const resumes = getResumes();
     const id = `resume_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const name = ((_b = (_a = data == null ? void 0 : data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "未命名简历";
@@ -493,15 +401,21 @@ function setupIPC() {
     };
     resumes.unshift(entry);
     saveResumes(resumes.slice(0, 50));
-    const userName = (_d = (_c = data == null ? void 0 : data.sections) == null ? void 0 : _c.personal) == null ? void 0 : _d.name;
-    if (userName) {
-      const profile = readJSONSafe(getUserProfilePath(userName)) || { sections: {}, updatedAt: null };
-      profile.sections = data.sections || profile.sections;
-      profile.name = userName;
-      profile.updatedAt = (/* @__PURE__ */ new Date()).toISOString();
-      writeJSONSafe(getUserProfilePath(userName), profile);
-    }
     return entry;
+  });
+  electron.ipcMain.handle("resume:update", async (_event, id, data, template) => {
+    var _a, _b;
+    const resumes = getResumes();
+    const idx = resumes.findIndex((r) => r.id === id);
+    if (idx === -1) return null;
+    const name = ((_b = (_a = data == null ? void 0 : data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "未命名简历";
+    resumes[idx].data = data;
+    resumes[idx].title = `${name} - ${(template == null ? void 0 : template.label) || resumes[idx].templateLabel || "简历"}`;
+    resumes[idx].templateName = (template == null ? void 0 : template.name) || resumes[idx].templateName;
+    resumes[idx].templateLabel = (template == null ? void 0 : template.label) || resumes[idx].templateLabel;
+    resumes[idx].createdAt = (/* @__PURE__ */ new Date()).toISOString();
+    saveResumes(resumes);
+    return resumes[idx];
   });
   electron.ipcMain.handle("resume:list", async () => {
     return getResumes();
@@ -616,58 +530,10 @@ async function initOpencode() {
     console.warn("Opencode failed to start, entering mock mode:", err.message || err);
   }
 }
-function migrateLegacyData() {
-  var _a, _b, _c, _d;
-  const existingUsers = listUsers();
-  if (existingUsers.length > 0) return;
-  const legacyResumes = getLegacyResumes();
-  if (legacyResumes.length === 0) return;
-  const defaultUserDir = getUserDir("default");
-  if (!fs.existsSync(defaultUserDir)) {
-    fs.mkdirSync(defaultUserDir, { recursive: true });
-  }
-  const latest = legacyResumes.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )[0];
-  const personal = ((_b = (_a = latest.data) == null ? void 0 : _a.sections) == null ? void 0 : _b.personal) || {};
-  const profile = {
-    name: personal.name || latest.title || "用户",
-    sections: ((_c = latest.data) == null ? void 0 : _c.sections) || {},
-    updatedAt: latest.createdAt || null
-  };
-  fs.writeFileSync(getUserProfilePath("default"), JSON.stringify(profile, null, 2), "utf-8");
-  const draft = {
-    template: latest.templateName || latest.templateLabel || "general",
-    sections: ((_d = latest.data) == null ? void 0 : _d.sections) || {},
-    completedAt: latest.createdAt || null
-  };
-  fs.writeFileSync(getUserResumeDraftPath("default"), JSON.stringify(draft, null, 2), "utf-8");
-  const preferences = {
-    template: latest.templateName || "general",
-    accentColor: "#1a56db",
-    fontFamily: "system",
-    fontSize: "13",
-    layout: "standard"
-  };
-  fs.writeFileSync(getUserPreferencesPath("default"), JSON.stringify(preferences, null, 2), "utf-8");
-  console.log(`Migrated ${legacyResumes.length} legacy resume(s) to userdata/default/`);
-}
-function getLegacyResumes() {
-  const userDataPath = electron.app.getPath("userData");
-  const configPath = path.join(userDataPath, "config.json");
-  if (!fs.existsSync(configPath)) return [];
-  try {
-    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    return config.resumes || [];
-  } catch {
-    return [];
-  }
-}
 let mainWindow = null;
 function ensureDirectories() {
   getTemplatesDir();
   getResumesDir();
-  getUserdataDir();
   const devTemplates = path.join(__dirname, "..", "templates");
   if (fs.existsSync(devTemplates)) {
     const targetDir = getTemplatesDir();
@@ -697,12 +563,16 @@ function createWindow() {
   });
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
   mainWindow.once("ready-to-show", () => {
     mainWindow == null ? void 0 : mainWindow.show();
+  });
+  mainWindow.webContents.on("before-input-event", (_e, input) => {
+    if (input.key === "F12") {
+      mainWindow == null ? void 0 : mainWindow.webContents.toggleDevTools();
+    }
   });
   mainWindow.webContents.on("crashed", (event, killed) => {
     console.error("Renderer crashed:", { killed });
@@ -719,7 +589,6 @@ process.on("unhandledRejection", (err) => {
 });
 electron.app.whenReady().then(async () => {
   ensureDirectories();
-  migrateLegacyData();
   setupIPC();
   await initOpencode();
   createWindow();

@@ -1,6 +1,7 @@
+import type { ResumeData } from "@/types/resume"
 import { templateFieldsToString } from "./template-context"
 
-export function buildFirstMessagePrompt(profile: UserProfile | null): string {
+export function buildFirstMessagePrompt(profile: ResumeData | null): string {
   if (profile?.sections && Object.keys(profile.sections).length > 0) {
     const name = profile.sections?.personal?.name
     const greeting = name ? `${name}你好！又见面了。` : "你好！"
@@ -32,7 +33,7 @@ ${JSON.stringify(profile.sections, null, 2)}
 - 一次只问 1-2 个问题`
 }
 
-export function buildResumeContext(profile: UserProfile | null, templateName?: string, templateFields?: string): string {
+export function buildResumeContext(profile: ResumeData | null, templateName?: string, templateFields?: string): string {
   const name = templateName || "general"
   const fields = templateFields || templateFieldsToString()
   const existingInfo = profile?.sections && Object.keys(profile.sections).length > 0
@@ -62,9 +63,9 @@ ${name}
 模板字段：
 ${fields}
 
-## 输出格式要求
+## 输出格式要求（每次回复必须遵守）
 
-当你确认信息已经足够完整，或者用户要求生成简历时，在回复的末尾输出简历 JSON 数据，格式如下：
+只要用户提供了新的简历信息、修改了已有信息（哪怕只改一个字段）、或要求生成简历，你**必须**在回复末尾输出完整的最新简历 JSON。格式如下：
 
 \`\`\`json
 {
@@ -78,6 +79,8 @@ ${fields}
   }
 }
 \`\`\`
+
+系统会解析这个 JSON 代码块来更新右侧预览面板。如果不输出 JSON 或格式错误，预览将无法同步。
 
 ${existingInfo}
 

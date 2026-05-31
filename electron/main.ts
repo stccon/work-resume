@@ -2,15 +2,13 @@ import { app, BrowserWindow } from "electron"
 import path from "path"
 import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
-import { getTemplatesDir, getResumesDir, getUserdataDir } from "./paths"
-import { migrateLegacyData } from "./migration"
+import { getTemplatesDir, getResumesDir } from "./paths"
 
 let mainWindow: BrowserWindow | null = null
 
 function ensureDirectories() {
   getTemplatesDir()
   getResumesDir()
-  getUserdataDir()
 
   const devTemplates = path.join(__dirname, "..", "templates")
   if (fs.existsSync(devTemplates)) {
@@ -43,13 +41,18 @@ function createWindow() {
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
-    mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"))
   }
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show()
+  })
+
+  mainWindow.webContents.on("before-input-event", (_e, input) => {
+    if (input.key === "F12") {
+      mainWindow?.webContents.toggleDevTools()
+    }
   })
 
   mainWindow.webContents.on("crashed", (event, killed) => {
@@ -71,7 +74,6 @@ process.on("unhandledRejection", (err) => {
 
 app.whenReady().then(async () => {
   ensureDirectories()
-  migrateLegacyData()
   setupIPC()
   await initOpencode()
   createWindow()

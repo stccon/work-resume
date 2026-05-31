@@ -13,7 +13,6 @@ import type { ResumeData } from "@/types/resume"
 
 import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
-import { applyStyleToPreferences } from "@/adapter/style-applier"
 
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light")
@@ -29,16 +28,15 @@ function App() {
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
-  const [currentUser, setCurrentUser] = useState<string | null>(null)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [viewMode, setViewMode] = useState<"chat" | "preview">("chat")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const charBufferRef = useRef("")
   const thinkBufferRef = useRef("")
-
-  const currentUserRef = useRef(currentUser)
-  currentUserRef.current = currentUser
-  const startupDoneRef = useRef(false)
+  const resumeDataRef = useRef(resumeData)
+  resumeDataRef.current = resumeData
+  const activeResumeIdRef = useRef(activeResumeId)
+  activeResumeIdRef.current = activeResumeId
+  const savedResumesRef = useRef(savedResumes)
+  savedResumesRef.current = savedResumes
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -49,46 +47,25 @@ function App() {
   }, [theme])
 
   useEffect(() => {
-    loadSavedResumes()
-    window.electronAPI.getModels().then(setModels).catch(() => setModels(["big-pickle"]))
-    window.electronAPI.getCurrentModel().then(setCurrentModel).catch(() => {})
-    discoverUsers()
-  }, [])
+    const init = async () => {
+      const [list, modelsList, current] = await Promise.all([
+        window.electronAPI.listResumes(),
+        window.electronAPI.getModels().catch(() => ["big-pickle"]),
+        window.electronAPI.getCurrentModel().catch(() => "big-pickle"),
+      ])
+      setSavedResumes(list)
+      setModels(modelsList)
+      setCurrentModel(current)
 
-  const discoverUsers = async () => {
-    try {
-      const list = await window.electronAPI.listUsers()
-      const userName = list.length > 0 ? list[0] : "default"
-      setCurrentUser(userName)
-      const profile = await window.electronAPI.loadProfile(userName)
-      setUserProfile(profile)
-    } catch { /* ignore */ }
-  }
-
-  const initChatContext = useCallback(async (userId: string) => {
-    const profile = await window.electronAPI.loadProfile(userId)
-    setUserProfile(profile)
-    const context = buildResumeContext(profile)
-    await window.electronAPI.setChatContext(context)
-  }, [])
-
-  useEffect(() => {
-    if (currentUser && !startupDoneRef.current) {
-      startupDoneRef.current = true
-      const doStartup = async () => {
-        await initChatContext(currentUser)
-        triggerFirstMessage()
+      if (list.length > 0) {
+        await selectResume(list[0].id, list)
       }
-      doStartup()
     }
-  }, [currentUser])
+    init()
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
-        e.preventDefault()
-        handleNewChat()
-      }
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault()
         setSettingsOpen(true)
@@ -98,6 +75,27 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
+  const selectResume = async (id: string, list?: SavedResume[]) => {
+    const resumes = list || savedResumesRef.current
+    const saved = resumes.find((r) => r.id === id)
+    if (!saved) return
+
+    setActiveResumeId(id)
+    setResumeData(saved.data)
+    setMessages([])
+
+    let tmpl = await window.electronAPI.getTemplate(saved.templateName)
+    if (!tmpl) tmpl = await window.electronAPI.getTemplate("general")
+    if (tmpl) setTemplateData(tmpl)
+
+    const context = buildResumeContext(saved.data, saved.templateName)
+    await window.electronAPI.setChatContext(context)
+
+    // Send a greeting acknowledging the existing resume
+    const prompt = buildFirstMessagePrompt(saved.data)
+    await sendFirstMessage(prompt)
+  }
+
   const loadSavedResumes = async () => {
     try {
       const list = await window.electronAPI.listResumes()
@@ -105,13 +103,24 @@ function App() {
     } catch { /* ignore */ }
   }
 
-  const loadPreferences = async (userId: string): Promise<UserPreferences> => {
-    try {
-      const prefs = await window.electronAPI.loadPreferences(userId)
-      return prefs
-    } catch {
-      return { template: "general", accentColor: "#1a56db", fontFamily: "system", fontSize: "13", layout: "standard" }
-    }
+  const handleCreateResume = async () => {
+    const tmpl = await window.electronAPI.getTemplate("general")
+    if (!tmpl) return
+
+    const emptyData: ResumeData = { template: "general", sections: {} }
+    const entry = await window.electronAPI.saveResume(emptyData, tmpl)
+
+    setActiveResumeId(entry.id)
+    setResumeData(null)
+    setTemplateData(tmpl)
+    setMessages([])
+
+    const list = await window.electronAPI.listResumes()
+    setSavedResumes(list)
+
+    const context = buildResumeContext(null, "general")
+    await window.electronAPI.setChatContext(context)
+    triggerFirstMessage()
   }
 
   const handleDismissWelcome = () => {
@@ -146,14 +155,6 @@ function App() {
     return null
   }, [])
 
-  const autoSaveResume = useCallback(async (data: ResumeData) => {
-    try {
-      const tmpl = await window.electronAPI.getTemplate(data.template)
-      await window.electronAPI.saveResume(data, tmpl)
-      await loadSavedResumes()
-    } catch { /* ignore */ }
-  }, [])
-
   const handleAfterDone = useCallback(async (content: string, thinking: string) => {
     setStreamingContent("")
     setStreamingThinking("")
@@ -162,38 +163,32 @@ function App() {
     const detected = tryDetectResumeJSON(content)
     if (detected) {
       setResumeData(detected)
-      setViewMode("preview")
-      setActiveResumeId(null)
-      autoSaveResume(detected)
-      const tmpl = await window.electronAPI.getTemplate(detected.template)
-      if (tmpl) setTemplateData(tmpl)
 
-      const user = currentUserRef.current
-      if (user) {
-        await window.electronAPI.saveProfile(user, detected)
-        const newContext = buildResumeContext({
-          name: detected.sections?.personal?.name,
-          sections: detected.sections,
-          updatedAt: new Date().toISOString()
-        })
+      const id = activeResumeIdRef.current
+      if (id) {
+        const tmpl = await window.electronAPI.getTemplate(detected.template)
+        if (tmpl) setTemplateData(tmpl)
+        await window.electronAPI.updateResume(id, detected, tmpl || undefined)
+
+        const newContext = buildResumeContext(detected, detected.template)
         await window.electronAPI.setChatContext(newContext)
+
+        const list = await window.electronAPI.listResumes()
+        setSavedResumes(list)
       }
     }
 
-    setMessages((prev) => [...prev, { role: "assistant", content, thinking }])
+    const displayContent = detected
+      ? content.replace(/```json\n?[\s\S]*?\n?```\n?/g, "").trim()
+      : content
 
-    const user = currentUserRef.current
-    if (user) {
-      const styleJson = tryDetectStyleJSON(content)
-      if (styleJson) {
-        loadPreferences(user).then((prefs) => {
-          const updated = applyStyleToPreferences(styleJson, prefs)
-          window.electronAPI.savePreferences(user, updated)
-          toast("success", `已套用分析到的视觉风格: ${styleJson.description}`)
-        })
-      }
+    setMessages((prev) => [...prev, { role: "assistant", content: displayContent, thinking }])
+
+    const styleJson = tryDetectStyleJSON(content)
+    if (styleJson) {
+      toast("success", `已套用分析到的视觉风格: ${styleJson.description}`)
     }
-  }, [tryDetectResumeJSON, tryDetectStyleJSON, autoSaveResume])
+  }, [tryDetectResumeJSON, tryDetectStyleJSON])
 
   const streamResponse = useCallback(async (text: string, isFirstMessage: boolean) => {
     setLoading(true)
@@ -253,22 +248,13 @@ function App() {
   }, [streamResponse])
 
   const triggerFirstMessage = useCallback(async () => {
-    const user = currentUserRef.current
-    if (!user) return
-    const profile = await window.electronAPI.loadProfile(user)
-    setUserProfile(profile)
-    const prompt = buildFirstMessagePrompt(profile)
+    const data = resumeDataRef.current
+    const prompt = buildFirstMessagePrompt(data)
     await sendFirstMessage(prompt)
   }, [sendFirstMessage])
 
   const handleSelectResume = async (id: string) => {
-    const saved = savedResumes.find((r) => r.id === id)
-    if (!saved) return
-    setActiveResumeId(id)
-    setResumeData(saved.data)
-    const tmpl = await window.electronAPI.getTemplate(saved.templateName)
-    if (tmpl) setTemplateData(tmpl)
-    setMessages([])
+    await selectResume(id)
   }
 
   const handleDeleteResume = async (id: string) => {
@@ -278,6 +264,8 @@ function App() {
       if (activeResumeId === id) {
         setActiveResumeId(null)
         setResumeData(null)
+        setTemplateData(null)
+        setMessages([])
       }
     } catch { /* ignore */ }
   }
@@ -289,18 +277,14 @@ function App() {
   }
 
   const handleNewChat = () => {
+    if (!activeResumeIdRef.current) return
     setMessages([])
-    setResumeData(null)
-    setActiveResumeId(null)
-    setStreamingContent("")
-    setStreamingThinking("")
     triggerFirstMessage()
   }
 
   const handleAnalyzeResume = async (file: File) => {
     setMessages([])
     setResumeData(null)
-    setActiveResumeId(null)
 
     const isPdf = file.name.endsWith(".pdf")
 
@@ -347,6 +331,11 @@ function App() {
     toast("info", "已选择文件")
   }
 
+  const hasResumes = savedResumes.length > 0
+  const activeResume = hasResumes && activeResumeId
+    ? savedResumes.find((r) => r.id === activeResumeId)
+    : null
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       <Sidebar
@@ -355,27 +344,22 @@ function App() {
         activeResumeId={activeResumeId}
         onSelectResume={handleSelectResume}
         onDeleteResume={handleDeleteResume}
+        onCreateResume={handleCreateResume}
       />
 
       <div className="flex-1 flex flex-col">
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">AI 简历助手</h1>
-            {currentUser && (
+            {activeResume && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-muted-foreground">
-                {currentUser}
+                {activeResume.title}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {resumeData && (
               <>
-                <button
-                  onClick={() => setViewMode(viewMode === "preview" ? "chat" : "preview")}
-                  className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
-                >
-                  {viewMode === "preview" ? "继续对话修改" : "查看简历预览"}
-                </button>
                 <button
                   onClick={handleNewChat}
                   className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
@@ -393,49 +377,56 @@ function App() {
           </div>
         </header>
 
-        {resumeData && templateData && viewMode === "preview" ? (
-          <div className="flex-1 overflow-y-auto">
-            <ResumePreview data={resumeData} template={templateData} />
+        {!hasResumes ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-4 max-w-sm">
+              <h2 className="text-xl font-semibold">欢迎使用 AI 简历助手</h2>
+              <p className="text-sm text-muted-foreground">
+                点击左侧「创建简历」按钮，AI 将引导你一步步完成一份专业的简历。
+              </p>
+            </div>
           </div>
         ) : (
-          <>
-            {!resumeData && (
-              <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleAnalyzeResume} />
-            )}
-
-            {resumeData && templateData && viewMode === "chat" && (
-              <div className="px-4 py-2 border-b border-border bg-accent/30">
-                <p className="text-xs text-muted-foreground">
-                  简历数据已生成，你可以继续对话修改它，或点击上方"查看简历预览"查看效果。
-                </p>
-              </div>
-            )}
-
-            <div className="flex-1 overflow-y-auto">
-              {messages.length === 0 && !loading ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
-                  <p className="text-lg">欢迎使用 AI 简历助手</p>
-                  <p className="text-sm">AI 正在准备中，请稍候...</p>
-                </div>
-              ) : (
-                <div className="max-w-4xl mx-auto py-4">
-                  {messages.map((msg, i) => (
-                    <ChatMessage key={i} role={msg.role} content={msg.content} thinking={msg.thinking} />
-                  ))}
-                  {loading && (
-                    <ChatMessage
-                      role="assistant"
-                      content={streamingContent || "..."}
-                      thinking={streamingThinking}
-                    />
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
+          <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col min-w-0">
+              {!resumeData && (
+                <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleAnalyzeResume} />
               )}
+              <div className="flex-1 overflow-y-auto">
+                {messages.length === 0 && !loading && !resumeData ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
+                    <p className="text-lg">欢迎使用 AI 简历助手</p>
+                    <p className="text-sm">请输入你的信息或上传一份现有简历开始</p>
+                  </div>
+                ) : messages.length === 0 && !loading ? (
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
+                    <p className="text-lg">欢迎使用 AI 简历助手</p>
+                    <p className="text-sm">AI 正在准备中，请稍候...</p>
+                  </div>
+                ) : (
+                  <div className="max-w-4xl mx-auto py-4">
+                    {messages.map((msg, i) => (
+                      <ChatMessage key={i} role={msg.role} content={msg.content} thinking={msg.thinking} />
+                    ))}
+                    {loading && (
+                      <ChatMessage
+                        role="assistant"
+                        content={streamingContent || "..."}
+                        thinking={streamingThinking}
+                      />
+                    )}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+              <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
             </div>
-
-            <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
-          </>
+            <div className="w-[45%] min-w-[360px] border-l border-border overflow-y-auto">
+              {resumeData && templateData ? (
+                <ResumePreview data={resumeData} template={templateData} />
+              ) : null}
+            </div>
+          </div>
         )}
       </div>
 
