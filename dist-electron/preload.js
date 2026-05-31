@@ -32,5 +32,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   clearChatContext: () => electron.ipcRenderer.invoke("chat:clear-context"),
   switchResume: (resumeId) => electron.ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath) => electron.ipcRenderer.invoke("pdf:extract-style", filePath),
+  setLastActiveResume: (id) => electron.ipcRenderer.invoke("resume:set-last-active", id),
+  getLastActiveResume: () => electron.ipcRenderer.invoke("resume:get-last-active"),
   log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message)
 });

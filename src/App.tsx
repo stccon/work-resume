@@ -71,7 +71,9 @@ function App() {
       setOpencodeConnected(status.connected)
 
       if (list.length > 0) {
-        await selectResume(list[0].id, list)
+        const lastId = await window.electronAPI.getLastActiveResume()
+        const targetId = lastId && list.some((r) => r.id === lastId) ? lastId : list[0].id
+        await selectResume(targetId, list)
       }
     }
     init()
@@ -97,6 +99,7 @@ function App() {
     setActiveResumeId(id)
     setResumeData(saved.data)
     setMessages([])
+    window.electronAPI.setLastActiveResume(id)
 
     let tmpl = await window.electronAPI.getTemplate(saved.templateName)
     if (!tmpl) tmpl = await window.electronAPI.getTemplate("general")

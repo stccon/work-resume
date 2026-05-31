@@ -32,5 +32,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   clearChatContext: () => ipcRenderer.invoke("chat:clear-context"),
   switchResume: (resumeId: string) => ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath: string) => ipcRenderer.invoke("pdf:extract-style", filePath),
+  setLastActiveResume: (id: string) => ipcRenderer.invoke("resume:set-last-active", id),
+  getLastActiveResume: () => ipcRenderer.invoke("resume:get-last-active") as Promise<string | null>,
   log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),
 })

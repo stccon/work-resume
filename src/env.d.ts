@@ -61,6 +61,8 @@ interface ElectronAPI {
   extractPdfStyle: (filePath: string) => Promise<any>
   opencodeStatus: () => Promise<{ connected: boolean }>
   opencodeRetry: () => Promise<{ connected: boolean }>
+  setLastActiveResume: (id: string) => Promise<void>
+  getLastActiveResume: () => Promise<string | null>
   log: (tag: string, message: string) => Promise<void>
 }
 

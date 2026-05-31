@@ -830,6 +830,12 @@ function setupIPC() {
       return { error: err.message || String(err) };
     }
   });
+  electron.ipcMain.handle("resume:set-last-active", async (_event, id) => {
+    store.set("lastActiveResumeId", id);
+  });
+  electron.ipcMain.handle("resume:get-last-active", async () => {
+    return store.get("lastActiveResumeId", null);
+  });
   electron.ipcMain.handle("log:write", async (_event, tag, message) => {
     log(tag, message);
   });

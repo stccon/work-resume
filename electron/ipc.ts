@@ -317,6 +317,16 @@ export function setupIPC() {
     }
   })
 
+  // ── Last Active Resume ──
+
+  ipcMain.handle("resume:set-last-active", async (_event, id: string) => {
+    store.set("lastActiveResumeId", id)
+  })
+
+  ipcMain.handle("resume:get-last-active", async () => {
+    return store.get("lastActiveResumeId", null)
+  })
+
   ipcMain.handle("log:write", async (_event, tag: string, message: string) => {
     log(tag, message)
   })
