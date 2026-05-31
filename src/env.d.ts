@@ -26,6 +26,13 @@ interface UserPreferences {
   layout: string
 }
 
+interface VisualThemeMeta {
+  name: string
+  label: string
+  description: string
+  layout: string
+}
+
 interface ElectronAPI {
   sendMessage: (text: string) => Promise<SendMessageResult>
   sendFirstMessage: (prompt: string) => Promise<SendMessageResult>
@@ -42,8 +49,10 @@ interface ElectronAPI {
   getResume: (id: string) => Promise<SavedResume | null>
   deleteResume: (id: string) => Promise<void>
   updateResume: (id: string, data: any, template?: any) => Promise<SavedResume | null>
-  exportPDF: (data: any, template: any) => Promise<{ success: boolean; path?: string; reason?: string }>
+  exportPDF: (data: any, template: any, visualThemeName?: string) => Promise<{ success: boolean; path?: string; reason?: string }>
   savePdfBuffer: (buffer: ArrayBuffer) => Promise<{ success: boolean; path?: string; reason?: string }>
+  getVisualThemes: () => Promise<VisualThemeMeta[]>
+  getVisualTheme: (name: string) => Promise<any>
   onChatChunk: (callback: (chunk: ChatChunk) => void) => void
   removeChatListeners: () => void
   setChatContext: (context: string) => Promise<void>

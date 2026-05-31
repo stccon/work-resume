@@ -10,6 +10,9 @@ import { ToastContainer, toast } from "@/components/Toast"
 import type { ChatMessage as ChatMessageType } from "@/adapter/ChatAdapter"
 import type { TemplateDefinition } from "@/types/template"
 import type { ResumeData } from "@/types/resume"
+import type { VisualTheme } from "@/types/visual-template"
+import { VisualThemePicker } from "@/components/VisualThemePicker"
+import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../visual-templates/index"
 
 import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
@@ -34,6 +37,8 @@ function App() {
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
+  const [visualThemes, setVisualThemes] = useState<VisualTheme[]>(getAllVisualThemes())
+  const [currentVisualTheme, setCurrentVisualTheme] = useState<VisualTheme>(getVisualTheme(DEFAULT_VISUAL_THEME))
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const resumeDataRef = useRef(resumeData)
@@ -338,7 +343,7 @@ function App() {
       return
     }
     try {
-      const result = await window.electronAPI.exportPDF(data, tmpl)
+      const result = await window.electronAPI.exportPDF(data, tmpl, currentVisualTheme.name)
       if (result.success) {
         toast("success", `已保存到 ${result.path}`)
       } else if (result.reason === "canceled") {
@@ -351,6 +356,10 @@ function App() {
 
   const handleFileSelected = (_file: File) => {
     toast("info", "已选择文件")
+  }
+
+  const handleVisualThemeChange = (theme: VisualTheme) => {
+    setCurrentVisualTheme(theme)
   }
 
   const handleRetryOpencode = async () => {
@@ -401,6 +410,11 @@ function App() {
           <div className="flex items-center gap-2">
             {resumeData && (
               <>
+                <VisualThemePicker
+                  themes={visualThemes}
+                  currentTheme={currentVisualTheme}
+                  onChange={handleVisualThemeChange}
+                />
                 <button
                   onClick={handleNewChat}
                   className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
@@ -463,7 +477,7 @@ function App() {
             </div>
             <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
               {resumeData && templateData ? (
-                <ResumePreview data={resumeData} template={templateData} />
+                <ResumePreview data={resumeData} template={templateData} visualTheme={currentVisualTheme} />
               ) : null}
             </div>
           </div>

@@ -2,26 +2,32 @@ import { app, BrowserWindow } from "electron"
 import path from "path"
 import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
-import { getTemplatesDir, getResumesDir } from "./paths"
+import { getTemplatesDir, getResumesDir, getVisualTemplatesDir } from "./paths"
 
 let mainWindow: BrowserWindow | null = null
+
+function copyJsonDir(srcDir: string, targetDir: string) {
+  if (!fs.existsSync(srcDir)) return
+  for (const file of fs.readdirSync(srcDir)) {
+    if (file.endsWith(".json")) {
+      const dest = path.join(targetDir, file)
+      if (!fs.existsSync(dest)) {
+        fs.copyFileSync(path.join(srcDir, file), dest)
+      }
+    }
+  }
+}
 
 function ensureDirectories() {
   getTemplatesDir()
   getResumesDir()
+  getVisualTemplatesDir()
 
   const devTemplates = path.join(__dirname, "..", "templates")
-  if (fs.existsSync(devTemplates)) {
-    const targetDir = getTemplatesDir()
-    for (const file of fs.readdirSync(devTemplates)) {
-      if (file.endsWith(".json")) {
-        const dest = path.join(targetDir, file)
-        if (!fs.existsSync(dest)) {
-          fs.copyFileSync(path.join(devTemplates, file), dest)
-        }
-      }
-    }
-  }
+  copyJsonDir(devTemplates, getTemplatesDir())
+
+  const devVisualTemplates = path.join(__dirname, "..", "visual-templates", "themes")
+  copyJsonDir(devVisualTemplates, getVisualTemplatesDir())
 }
 
 function createWindow() {

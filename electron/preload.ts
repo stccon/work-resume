@@ -16,8 +16,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getResume: (id: string) => ipcRenderer.invoke("resume:get", id),
   deleteResume: (id: string) => ipcRenderer.invoke("resume:delete", id),
   updateResume: (id: string, data: any, template?: any) => ipcRenderer.invoke("resume:update", id, data, template),
-  exportPDF: (data: any, template: any) => ipcRenderer.invoke("resume:export-pdf", data, template),
+  exportPDF: (data: any, template: any, visualThemeName?: string) => ipcRenderer.invoke("resume:export-pdf", data, template, visualThemeName),
   savePdfBuffer: (buffer: ArrayBuffer) => ipcRenderer.invoke("resume:save-pdf-buffer", buffer),
+  getVisualThemes: () => ipcRenderer.invoke("visual-templates:list"),
+  getVisualTheme: (name: string) => ipcRenderer.invoke("visual-templates:get", name),
   opencodeStatus: () => ipcRenderer.invoke("opencode:status") as Promise<{ connected: boolean }>,
   opencodeRetry: () => ipcRenderer.invoke("opencode:retry") as Promise<{ connected: boolean }>,
   onChatChunk: (callback: (chunk: { type: "done"; content?: string }) => void) => {

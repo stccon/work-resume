@@ -29,6 +29,10 @@ export function generateResumeFileName(userName: string, templateLabel: string):
   return `${userName}_${templateLabel}_${date}.pdf`
 }
 
+export function getVisualTemplatesDir(): string {
+  return ensureDir(path.join(getBaseDir(), "visual-templates"))
+}
+
 export function resolveTemplatesDir(): string {
   return getTemplatesDir()
 }
