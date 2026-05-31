@@ -1,11 +1,9 @@
 import { cn } from "@/lib/utils"
-import { useState } from "react"
-import { ChevronDown, ChevronRight, Bot, User } from "lucide-react"
+import { Bot, User } from "lucide-react"
 
 interface ChatMessageProps {
   role: "user" | "assistant"
   content: string
-  thinking?: string
 }
 
 function TypingDots() {
@@ -18,8 +16,7 @@ function TypingDots() {
   )
 }
 
-export function ChatMessage({ role, content, thinking }: ChatMessageProps) {
-  const [showThinking, setShowThinking] = useState(true)
+export function ChatMessage({ role, content }: ChatMessageProps) {
   const isLoading = role === "assistant" && (content === "..." || content === "")
 
   return (
@@ -30,22 +27,6 @@ export function ChatMessage({ role, content, thinking }: ChatMessageProps) {
         </div>
       )}
       <div className={cn("max-w-[80%]", role === "user" && "order-first")}>
-        {role === "assistant" && thinking && (
-          <div className="mb-2">
-            <button
-              onClick={() => setShowThinking(!showThinking)}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {showThinking ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-              思考过程
-            </button>
-            {showThinking && (
-              <div className="mt-1 p-3 rounded-lg bg-muted/50 text-sm text-muted-foreground border border-border whitespace-pre-wrap">
-                {thinking}
-              </div>
-            )}
-          </div>
-        )}
         <div
           className={cn(
             "rounded-lg px-4 py-2 text-sm whitespace-pre-wrap",

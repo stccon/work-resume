@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  sendMessage: (text: string) => ipcRenderer.invoke("chat:send", text) as Promise<{ content: string; thinking: string }>,
-  sendFirstMessage: (prompt: string) => ipcRenderer.invoke("chat:send-first-message", prompt) as Promise<{ content: string; thinking: string }>,
+  sendMessage: (text: string) => ipcRenderer.invoke("chat:send", text) as Promise<{ content: string }>,
+  sendFirstMessage: (prompt: string) => ipcRenderer.invoke("chat:send-first-message", prompt) as Promise<{ content: string }>,
   getModels: () => ipcRenderer.invoke("models:list"),
   setModel: (model: string) => ipcRenderer.invoke("models:set", model),
   getCurrentModel: () => ipcRenderer.invoke("models:current"),
@@ -20,7 +20,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   savePdfBuffer: (buffer: ArrayBuffer) => ipcRenderer.invoke("resume:save-pdf-buffer", buffer),
   opencodeStatus: () => ipcRenderer.invoke("opencode:status") as Promise<{ connected: boolean }>,
   opencodeRetry: () => ipcRenderer.invoke("opencode:retry") as Promise<{ connected: boolean }>,
-  onChatChunk: (callback: (chunk: { type: "text" | "thinking" | "done"; text?: string; content?: string; thinking?: string }) => void) => {
+  onChatChunk: (callback: (chunk: { type: "done"; content?: string }) => void) => {
     ipcRenderer.on("chat:chunk", (_event, chunk) => callback(chunk))
   },
   removeChatListeners: () => {
@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   setChatContext: (context: string) => ipcRenderer.invoke("chat:set-context", context),
   clearChatContext: () => ipcRenderer.invoke("chat:clear-context"),
+  switchResume: (resumeId: string) => ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath: string) => ipcRenderer.invoke("pdf:extract-style", filePath),
   log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),
 })

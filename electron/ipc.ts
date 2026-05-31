@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, dialog } from "electron"
-import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext } from "./opencode"
+import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext, switchResume, removeResumeSession } from "./opencode"
 import path from "path"
 import fs from "fs"
 import { log } from "./logger"
@@ -116,7 +116,7 @@ export function setupIPC() {
       return result
     } catch (err: any) {
       console.error("chat:send error:", err)
-      return { content: `（错误）${err.message || String(err)}`, thinking: "" }
+      return { content: `（错误）${err.message || String(err)}` }
     }
   })
 
@@ -127,7 +127,7 @@ export function setupIPC() {
       return result
     } catch (err: any) {
       console.error("chat:send-first-message error:", err)
-      return { content: `（错误）${err.message || String(err)}`, thinking: "" }
+      return { content: `（错误）${err.message || String(err)}` }
     }
   })
 
@@ -137,6 +137,10 @@ export function setupIPC() {
 
   ipcMain.handle("chat:clear-context", async () => {
     clearConversationContext()
+  })
+
+  ipcMain.handle("chat:switch-resume", async (_event, resumeId: string) => {
+    await switchResume(resumeId)
   })
 
   ipcMain.handle("models:list", async () => {
@@ -233,6 +237,7 @@ export function setupIPC() {
   ipcMain.handle("resume:delete", async (_event, id: string) => {
     const resumes = getResumes().filter((r) => r.id !== id)
     saveResumes(resumes)
+    removeResumeSession(id)
   })
 
   ipcMain.handle("resume:export-pdf", async (_event, data: any, template: any) => {
@@ -342,16 +347,12 @@ export function setupIPC() {
 export async function initOpencode() {
   try {
     await startOpencode()
-    if (isMockMode()) {
-      console.log("Running in mock mode (opencode SDK not available)")
-    } else {
-      const savedModel = store.get("currentModel")
-      if (savedModel) {
-        setModel(savedModel)
-        console.log("Restored model:", savedModel)
-      }
-      console.log("Opencode initialized")
+    const savedModel = store.get("currentModel")
+    if (savedModel) {
+      setModel(savedModel)
+      console.log("Restored model:", savedModel)
     }
+    console.log("Opencode initialized")
   } catch (err: any) {
     console.warn("Opencode failed to start, entering mock mode:", err.message || err)
   }

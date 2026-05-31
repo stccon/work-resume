@@ -2,13 +2,11 @@
 
 interface SendMessageResult {
   content: string
-  thinking: string
 }
 
 interface ChatChunk {
   type: "done"
   content?: string
-  thinking?: string
 }
 
 interface SavedResume {
@@ -50,6 +48,7 @@ interface ElectronAPI {
   removeChatListeners: () => void
   setChatContext: (context: string) => Promise<void>
   clearChatContext: () => Promise<void>
+  switchResume: (resumeId: string) => Promise<void>
   extractPdfStyle: (filePath: string) => Promise<any>
   opencodeStatus: () => Promise<{ connected: boolean }>
   opencodeRetry: () => Promise<{ connected: boolean }>

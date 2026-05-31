@@ -28,6 +28,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   },
   setChatContext: (context) => electron.ipcRenderer.invoke("chat:set-context", context),
   clearChatContext: () => electron.ipcRenderer.invoke("chat:clear-context"),
+  switchResume: (resumeId) => electron.ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath) => electron.ipcRenderer.invoke("pdf:extract-style", filePath),
   log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message)
 });

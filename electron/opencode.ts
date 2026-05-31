@@ -127,6 +127,8 @@ export async function retryOpencode(): Promise<boolean> {
 }
 
 let sessionLock: Promise<void> | null = null
+const resumeSessions = new Map<string, string>()
+let currentResumeId: string | null = null
 
 async function getClient() {
   if (client) return client
@@ -174,7 +176,6 @@ async function streamFromGlobalEvents(
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
     let buf = ""
-    let currentPartType = ""
 
     while (true) {
       const { done, value } = await reader.read()
@@ -203,23 +204,10 @@ async function streamFromGlobalEvents(
 
             const pType = payload.type || eventType
 
-            if (props?.part?.type) currentPartType = props.part.type
-
             const text = props.delta || props.text || props?.part?.text || ""
             if (!text) { eventType = ""; continue }
 
-            const isText = pType.includes("text") ||
-              (pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning")
-            const isReason = pType.includes("reason") ||
-              (pType === "message.part.delta" && (props.field === "reasoning" || (props.field === "text" && currentPartType === "reasoning")))
-
-            log("sse", `event pType=${pType} field=${props.field || "?"} partType=${currentPartType} textLen=${text.length} isText=${isText} isReason=${isReason}`)
-
-            if (isText) {
-              log("sse-text", text.slice(0, 300))
-            } else if (isReason) {
-              log("sse-think", text.slice(0, 300))
-            }
+            log("sse", `event pType=${pType} field=${props.field || "?"} textLen=${text.length}`)
           } catch { /* json parse */ }
           eventType = ""
         }
@@ -240,13 +228,37 @@ export function clearConversationContext() {
   conversationContext = ""
 }
 
+export function switchResume(resumeId: string): void {
+  if (currentResumeId && sessionId) {
+    resumeSessions.set(currentResumeId, sessionId)
+  }
+
+  if (resumeSessions.has(resumeId)) {
+    sessionId = resumeSessions.get(resumeId)!
+    sessionLock = null
+  } else {
+    sessionId = null
+    sessionLock = null
+  }
+
+  currentResumeId = resumeId
+}
+
+export function removeResumeSession(resumeId: string) {
+  resumeSessions.delete(resumeId)
+}
+
 export async function sendPrompt(
   text: string,
   win?: BrowserWindow | null,
   asFirstMessage = false
-): Promise<{ content: string; thinking: string }> {
+): Promise<{ content: string }> {
   const c = await getClient()
   const sid = await ensureSession()
+
+  if (currentResumeId && !resumeSessions.has(currentResumeId)) {
+    resumeSessions.set(currentResumeId, sid)
+  }
 
   const abortController = new AbortController()
 
@@ -281,17 +293,13 @@ export async function sendPrompt(
       .filter((p: any) => p.type === "text")
       .map((p: any) => p.text)
       .join("")
-    const thinking = parts
-      .filter((p: any) => p.type === "reasoning")
-      .map((p: any) => p.text)
-      .join("\n")
 
-    log("prompt-result", `parts=${parts.length} contentLen=${content.length} content=${content.slice(0, 500)} thinking=${thinking.slice(0, 300)}`)
+    log("prompt-result", `parts=${parts.length} contentLen=${content.length}`)
 
     if (win) {
-      win.webContents.send("chat:chunk", { type: "done", content, thinking })
+      win.webContents.send("chat:chunk", { type: "done", content })
     }
-    return { content: content || "(空回复)", thinking }
+    return { content: content || "(空回复)", thinking: "" }
   } finally {
     abortController.abort()
   }

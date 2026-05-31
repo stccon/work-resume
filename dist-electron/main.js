@@ -138,6 +138,8 @@ async function retryOpencode() {
   }
 }
 let sessionLock = null;
+const resumeSessions = /* @__PURE__ */ new Map();
+let currentResumeId = null;
 async function getClient() {
   if (client) return client;
   if (!serverUrl) throw new Error("Opencode 未连接");
@@ -168,7 +170,7 @@ async function ensureSession() {
   return sessionId;
 }
 async function streamFromGlobalEvents(sid, win, signal) {
-  var _a, _b, _c;
+  var _a, _b;
   if (!serverUrl) return;
   try {
     const res = await fetch(`${serverUrl}/global/event`, { signal });
@@ -176,7 +178,6 @@ async function streamFromGlobalEvents(sid, win, signal) {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buf = "";
-    let currentPartType = "";
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -204,20 +205,12 @@ async function streamFromGlobalEvents(sid, win, signal) {
               continue;
             }
             const pType = payload.type || eventType;
-            if ((_b = props == null ? void 0 : props.part) == null ? void 0 : _b.type) currentPartType = props.part.type;
-            const text = props.delta || props.text || ((_c = props == null ? void 0 : props.part) == null ? void 0 : _c.text) || "";
+            const text = props.delta || props.text || ((_b = props == null ? void 0 : props.part) == null ? void 0 : _b.text) || "";
             if (!text) {
               eventType = "";
               continue;
             }
-            const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning";
-            const isReason = pType.includes("reason") || pType === "message.part.delta" && (props.field === "reasoning" || props.field === "text" && currentPartType === "reasoning");
-            log("sse", `event pType=${pType} field=${props.field || "?"} partType=${currentPartType} textLen=${text.length} isText=${isText} isReason=${isReason}`);
-            if (isText) {
-              log("sse-text", text.slice(0, 300));
-            } else if (isReason) {
-              log("sse-think", text.slice(0, 300));
-            }
+            log("sse", `event pType=${pType} field=${props.field || "?"} textLen=${text.length}`);
           } catch {
           }
           eventType = "";
@@ -234,10 +227,29 @@ function setConversationContext(ctx) {
 function clearConversationContext() {
   conversationContext = "";
 }
+function switchResume(resumeId) {
+  if (currentResumeId && sessionId) {
+    resumeSessions.set(currentResumeId, sessionId);
+  }
+  if (resumeSessions.has(resumeId)) {
+    sessionId = resumeSessions.get(resumeId);
+    sessionLock = null;
+  } else {
+    sessionId = null;
+    sessionLock = null;
+  }
+  currentResumeId = resumeId;
+}
+function removeResumeSession(resumeId) {
+  resumeSessions.delete(resumeId);
+}
 async function sendPrompt(text, win, asFirstMessage = false) {
   var _a;
   const c = await getClient();
   const sid = await ensureSession();
+  if (currentResumeId && !resumeSessions.has(currentResumeId)) {
+    resumeSessions.set(currentResumeId, sid);
+  }
   const abortController = new AbortController();
   if (win) {
     streamFromGlobalEvents(sid, win, abortController.signal);
@@ -263,12 +275,11 @@ ${prefix}${text}` : text;
     if (result.error) throw new Error(JSON.stringify(result.error));
     const parts = ((_a = result.data) == null ? void 0 : _a.parts) || [];
     const content = parts.filter((p) => p.type === "text").map((p) => p.text).join("");
-    const thinking = parts.filter((p) => p.type === "reasoning").map((p) => p.text).join("\n");
-    log("prompt-result", `parts=${parts.length} contentLen=${content.length} content=${content.slice(0, 500)} thinking=${thinking.slice(0, 300)}`);
+    log("prompt-result", `parts=${parts.length} contentLen=${content.length}`);
     if (win) {
-      win.webContents.send("chat:chunk", { type: "done", content, thinking });
+      win.webContents.send("chat:chunk", { type: "done", content });
     }
-    return { content: content || "(空回复)", thinking };
+    return { content: content || "(空回复)", thinking: "" };
   } finally {
     abortController.abort();
   }
@@ -386,7 +397,7 @@ function setupIPC() {
       return result;
     } catch (err) {
       console.error("chat:send error:", err);
-      return { content: `（错误）${err.message || String(err)}`, thinking: "" };
+      return { content: `（错误）${err.message || String(err)}` };
     }
   });
   electron.ipcMain.handle("chat:send-first-message", async (event, prompt) => {
@@ -396,7 +407,7 @@ function setupIPC() {
       return result;
     } catch (err) {
       console.error("chat:send-first-message error:", err);
-      return { content: `（错误）${err.message || String(err)}`, thinking: "" };
+      return { content: `（错误）${err.message || String(err)}` };
     }
   });
   electron.ipcMain.handle("chat:set-context", async (_event, context) => {
@@ -404,6 +415,9 @@ function setupIPC() {
   });
   electron.ipcMain.handle("chat:clear-context", async () => {
     clearConversationContext();
+  });
+  electron.ipcMain.handle("chat:switch-resume", async (_event, resumeId) => {
+    await switchResume(resumeId);
   });
   electron.ipcMain.handle("models:list", async () => {
     return getModels();
@@ -484,6 +498,7 @@ function setupIPC() {
   electron.ipcMain.handle("resume:delete", async (_event, id) => {
     const resumes = getResumes().filter((r) => r.id !== id);
     saveResumes(resumes);
+    removeResumeSession(id);
   });
   electron.ipcMain.handle("resume:export-pdf", async (_event, data, template) => {
     const win = new electron.BrowserWindow({
@@ -577,16 +592,12 @@ function setupIPC() {
 async function initOpencode() {
   try {
     await startOpencode();
-    if (isMockMode()) {
-      console.log("Running in mock mode (opencode SDK not available)");
-    } else {
-      const savedModel = store.get("currentModel");
-      if (savedModel) {
-        setModel(savedModel);
-        console.log("Restored model:", savedModel);
-      }
-      console.log("Opencode initialized");
+    const savedModel = store.get("currentModel");
+    if (savedModel) {
+      setModel(savedModel);
+      console.log("Restored model:", savedModel);
     }
+    console.log("Opencode initialized");
   } catch (err) {
     console.warn("Opencode failed to start, entering mock mode:", err.message || err);
   }

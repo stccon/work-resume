@@ -1,12 +1,10 @@
 export interface ChatMessage {
   role: "user" | "assistant"
   content: string
-  thinking?: string
 }
 
 export interface StreamCallbacks {
   onChunk: (chunk: string) => void
-  onThinking?: (thinking: string) => void
   onDone: () => void
   onError: (error: string) => void
 }

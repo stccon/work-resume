@@ -30,7 +30,6 @@ function App() {
   const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem("welcome-done"))
   const [templateData, setTemplateData] = useState<TemplateDefinition | null>(null)
   const [streamingContent, setStreamingContent] = useState("")
-  const [streamingThinking, setStreamingThinking] = useState("")
   const [opencodeConnected, setOpencodeConnected] = useState(true)
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
@@ -46,7 +45,7 @@ function App() {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages, streamingContent, streamingThinking])
+  }, [messages, streamingContent])
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark")
@@ -85,6 +84,7 @@ function App() {
   }, [])
 
   const selectResume = async (id: string, list?: SavedResume[]) => {
+    if (id === activeResumeIdRef.current) return
     const resumes = list || savedResumesRef.current
     const saved = resumes.find((r) => r.id === id)
     if (!saved) return
@@ -97,6 +97,7 @@ function App() {
     if (!tmpl) tmpl = await window.electronAPI.getTemplate("general")
     if (tmpl) setTemplateData(tmpl)
 
+    await window.electronAPI.switchResume(id)
     const context = buildResumeContext(saved.data, saved.templateName)
     await window.electronAPI.setChatContext(context)
 
@@ -193,9 +194,8 @@ function App() {
     return null
   }, [])
 
-  const handleAfterDone = useCallback(async (content: string, thinking: string) => {
+  const handleAfterDone = useCallback(async (content: string) => {
     setStreamingContent("")
-    setStreamingThinking("")
     setLoading(false)
 
     const detected = tryDetectResumeJSON(content)
@@ -220,7 +220,7 @@ function App() {
       ? content.replace(/```json\n?[\s\S]*?\n?```\n?/g, "").trim()
       : content
 
-    setMessages((prev) => [...prev, { role: "assistant", content: displayContent, thinking }])
+    setMessages((prev) => [...prev, { role: "assistant", content: displayContent }])
 
     const styleJson = tryDetectStyleJSON(content)
     if (styleJson) {
@@ -231,7 +231,6 @@ function App() {
   const streamResponse = useCallback(async (text: string, isFirstMessage: boolean) => {
     setLoading(true)
     setStreamingContent("")
-    setStreamingThinking("")
 
     window.electronAPI.removeChatListeners()
 
@@ -239,9 +238,8 @@ function App() {
       if (chunk.type === "done") {
         window.electronAPI.removeChatListeners()
         const content = chunk.content || "(无回复)"
-        const thinking = chunk.thinking || ""
         log("renderer", "done — content (first 500):", content.slice(0, 500))
-        handleAfterDone(content, thinking)
+        handleAfterDone(content)
       }
     })
 
@@ -255,10 +253,9 @@ function App() {
       window.electronAPI.removeChatListeners()
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `抱歉，出错了：${err}`, thinking: "" },
+        { role: "assistant", content: `抱歉，出错了：${err}` },
       ])
       setStreamingContent("")
-      setStreamingThinking("")
       setLoading(false)
     }
   }, [handleAfterDone])
@@ -450,13 +447,12 @@ function App() {
                 ) : (
                   <div className="max-w-4xl mx-auto py-4">
                     {messages.map((msg, i) => (
-                      <ChatMessage key={i} role={msg.role} content={msg.content} thinking={msg.thinking} />
+                      <ChatMessage key={i} role={msg.role} content={msg.content} />
                     ))}
                     {loading && (
                       <ChatMessage
                         role="assistant"
                         content={streamingContent || "..."}
-                        thinking={streamingThinking}
                       />
                     )}
                     <div ref={messagesEndRef} />
@@ -465,7 +461,7 @@ function App() {
               </div>
               <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
             </div>
-            <div className="w-[45%] min-w-[360px] border-l border-border overflow-y-auto">
+            <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
               {resumeData && templateData ? (
                 <ResumePreview data={resumeData} template={templateData} />
               ) : null}
