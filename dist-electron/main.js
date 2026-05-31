@@ -332,6 +332,255 @@ function generateResumeFileName(userName, templateLabel) {
 function getVisualTemplatesDir() {
   return ensureDir(path.join(getBaseDir(), "visual-templates"));
 }
+function renderResumeCSS(theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  const s = theme.spacing;
+  return `* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; }
+@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+.resume-header { text-align:center; margin-bottom:20px; }
+.resume-name { font-size:${t.nameFontSize}; font-weight:700; color:${c.text}; margin:0; }
+.resume-title { font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; }
+.resume-contact { font-size:11px; color:${c.textMuted}; margin-top:8px; display:flex; justify-content:center; gap:12px; }
+.resume-section { margin-bottom:${s.sectionGap}; }
+.resume-section-title { margin-bottom:8px; }
+.resume-section-title.underlined { font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.primary}; border-bottom:2px solid ${c.primary}; padding-bottom:4px; }
+.resume-section-title.colored-bg { font-size:${t.sectionTitleFontSize}; font-weight:700; color:#fff; background:${c.primary}; padding:4px 10px; border-radius:4px; }
+.resume-section-title.minimal { font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.text}; }
+.resume-body-text { font-size:${t.bodyFontSize}; line-height:${t.lineHeight}; white-space:pre-wrap; }
+.resume-field-row { display:flex; margin-bottom:4px; font-size:${t.bodyFontSize}; }
+.resume-field-label { color:${c.textMuted}; width:96px; flex-shrink:0; }
+.resume-field-value { color:${c.text}; }
+.resume-entry { margin-bottom:${s.entryGap}; }
+.resume-entry-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; }
+.resume-entry-main-title { font-weight:600; font-size:${t.bodyFontSize}; color:${c.text}; }
+.resume-entry-subtitle { font-size:11px; color:${c.textMuted}; }
+.resume-entry-date { font-size:11px; color:${c.textMuted}; white-space:nowrap; margin-left:12px; }
+.resume-entry-detail { font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; margin-top:6px; white-space:pre-wrap; }
+.resume-entry-extra { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; }
+.resume-entry-extra-item { font-size:11px; color:${c.textMuted}; }
+.resume-two-column { display:flex; min-height:100vh; }
+.resume-sidebar { width:35%; background:${c.sidebarBg || c.primary}; padding:${s.pagePadding}; }
+.resume-sidebar .resume-name { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-title { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-sidebar .resume-contact { color:${c.sidebarText ? `${c.sidebarText}99` : "#ffffff99"}; }
+.resume-sidebar .resume-section-title { color:${c.sidebarText || "#fff"}; border-bottom-color:${c.sidebarText || "#fff"} !important; }
+.resume-sidebar .resume-field-label { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; width:80px; }
+.resume-sidebar .resume-field-value { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-entry-main-title { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-entry-subtitle { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-sidebar .resume-entry-date { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-sidebar .resume-entry-detail { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-entry-extra-item { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-main { width:65%; padding:${s.pagePadding}; background:${c.background}; }
+.resume-footer { text-align:center; font-size:10px; color:${c.textMuted}; margin-top:24px; padding-top:12px; border-top:1px solid ${c.border}; }`;
+}
+function sectionTitleClass(theme) {
+  return `resume-section-title ${theme.sectionStyle}`;
+}
+function htmlEscapedText(v) {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function formatValue(v) {
+  if (v == null) return "";
+  if (typeof v === "string") return htmlEscapedText(v);
+  if (typeof v === "object") return htmlEscapedText(JSON.stringify(v));
+  return htmlEscapedText(String(v));
+}
+function getFieldLabel(section, fieldId) {
+  var _a;
+  const field = (_a = section == null ? void 0 : section.fields) == null ? void 0 : _a.find((f) => f.id === fieldId);
+  if (field) return htmlEscapedText(field.label);
+  const known = {
+    name: "姓名",
+    email: "邮箱",
+    phone: "电话",
+    date: "时间",
+    tech: "技术栈",
+    detail: "详细描述",
+    projects: "项目经历",
+    responsibilities: "职责",
+    achievements: "成果",
+    startDate: "开始时间",
+    endDate: "结束时间",
+    company: "公司",
+    position: "职位",
+    school: "学校",
+    major: "专业",
+    degree: "学位",
+    gradYear: "毕业年份"
+  };
+  for (const [key, label] of Object.entries(known)) {
+    if (fieldId.includes(key)) return label;
+  }
+  return htmlEscapedText(fieldId);
+}
+function formatLines(value) {
+  const lines = value.split("\n").filter((l) => l.trim());
+  return lines.map((l) => `<p style="margin:0 0 2px 0">${htmlEscapedText(l)}</p>`).join("");
+}
+function isMultiEntry(fields) {
+  const keys = Object.keys(fields);
+  if (keys.length === 0) return false;
+  const prefixCounts = /* @__PURE__ */ new Map();
+  for (const key of keys) {
+    const m = key.match(/^([a-zA-Z]+)(\d+)_/);
+    if (m) prefixCounts.set(m[1], (prefixCounts.get(m[1]) || 0) + 1);
+  }
+  for (const count of prefixCounts.values()) {
+    if (count >= 3) return true;
+  }
+  return false;
+}
+function groupFieldsByEntry(fields) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const key of Object.keys(fields)) {
+    const m = key.match(/^([a-zA-Z]+)(\d+)_(.+)$/);
+    if (m) {
+      const idx = parseInt(m[2], 10);
+      const subKey = m[3];
+      if (!groups.has(idx)) groups.set(idx, {});
+      groups.get(idx)[subKey] = fields[key];
+    }
+  }
+  const entries = Array.from(groups.entries()).sort(([a], [b]) => a - b).map(([index, fieldData]) => ({ index, fields: fieldData }));
+  if (entries.length === 0) entries.push({ index: 0, fields: { ...fields } });
+  return entries;
+}
+function renderSectionContent(section, sectionData, theme, sidebar = false) {
+  var _a;
+  const isSummary = section.id === "summary";
+  const isSkills = section.id === "skills";
+  const isMulti = ["experience", "education", "projects"].includes(section.id) && isMultiEntry(sectionData);
+  if (isSummary) {
+    const text = Object.values(sectionData)[0];
+    if (!text) return "";
+    return `<p class="resume-body-text">${formatValue(text)}</p>`;
+  }
+  if (isSkills) {
+    const parts2 = [];
+    for (const field of section.fields || []) {
+      const value = sectionData[field.id];
+      if (!value) continue;
+      parts2.push(`<div class="resume-field-row"><span class="resume-field-label">${htmlEscapedText(field.label)}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`);
+    }
+    return `<div class="resume-section-content">${parts2.join("")}</div>`;
+  }
+  if (isMulti) {
+    const entries = groupFieldsByEntry(sectionData);
+    const parts2 = entries.map((entry) => {
+      const titleKey = section.id === "experience" ? "position" : section.id === "education" ? "school" : "name";
+      const subtitleKey = section.id === "experience" ? "company" : section.id === "education" ? "major" : "";
+      const hasDate = entry.fields.date || entry.fields.startDate || entry.fields.endDate;
+      const dateStr = entry.fields.date || (entry.fields.startDate ? `${entry.fields.startDate} - ${entry.fields.endDate || "至今"}` : "");
+      const mainTitle = entry.fields[titleKey] || "";
+      const subTitle = subtitleKey && entry.fields[subtitleKey] ? entry.fields[subtitleKey] : "";
+      const detail = entry.fields.detail || "";
+      const extraKeys = Object.keys(entry.fields).filter(
+        (k) => k !== titleKey && k !== subtitleKey && k !== "detail" && k !== "date" && k !== "startDate" && k !== "endDate"
+      );
+      let html = `<div class="resume-entry">`;
+      if (mainTitle || hasDate) {
+        html += `<div class="resume-entry-header">`;
+        html += `<div>`;
+        if (mainTitle) html += `<span class="resume-entry-main-title">${formatValue(mainTitle)}</span>`;
+        if (subTitle) html += `<div class="resume-entry-subtitle">${formatValue(subTitle)}</div>`;
+        html += `</div>`;
+        if (hasDate) html += `<span class="resume-entry-date">${formatValue(dateStr)}</span>`;
+        html += `</div>`;
+      }
+      if (detail) {
+        html += `<div class="resume-entry-detail">${formatLines(detail)}</div>`;
+      }
+      if (extraKeys.length > 0) {
+        html += `<div class="resume-entry-extra">`;
+        for (const k of extraKeys) {
+          html += `<div class="resume-entry-extra-item"><span>${getFieldLabel(section, k)}：</span><span>${formatValue(entry.fields[k])}</span></div>`;
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+      return html;
+    });
+    return `<div class="resume-section-content">${parts2.join("")}</div>`;
+  }
+  const parts = [];
+  for (const field of section.fields || []) {
+    const value = sectionData[field.id];
+    if (!value) continue;
+    parts.push(`<div class="resume-field-row"><span class="resume-field-label">${htmlEscapedText(field.label)}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`);
+  }
+  for (const [k, v] of Object.entries(sectionData)) {
+    if ((_a = section.fields) == null ? void 0 : _a.some((f) => f.id === k)) continue;
+    if (!v) continue;
+    parts.push(`<div class="resume-field-row"><span class="resume-field-label">${getFieldLabel(section, k)}：</span><span class="resume-field-value">${formatValue(v)}</span></div>`);
+  }
+  return `<div class="resume-section-content">${parts.join("")}</div>`;
+}
+function renderSections(template, data, theme, sectionIds) {
+  const parts = [];
+  for (const section of template.sections || []) {
+    if (sectionIds && !sectionIds.includes(section.id)) continue;
+    const sectionData = data.sections[section.id];
+    if (!sectionData || Object.keys(sectionData).length === 0) continue;
+    const content = renderSectionContent(section, sectionData, theme, false);
+    if (!content) continue;
+    parts.push(`<div class="resume-section">
+      <div class="${sectionTitleClass(theme)}">${htmlEscapedText(section.label)}</div>
+      ${content}
+    </div>`);
+  }
+  return parts.join("");
+}
+function renderResumeBody(data, template, theme) {
+  var _a, _b, _c, _d, _e, _f;
+  const c = theme.colors;
+  const s = theme.spacing;
+  const name = ((_a = data.sections.personal) == null ? void 0 : _a.name) || ((_b = data.sections.personal) == null ? void 0 : _b.title) || "简历";
+  const title = ((_c = data.sections.personal) == null ? void 0 : _c.title) || "";
+  const email = ((_d = data.sections.personal) == null ? void 0 : _d.email) || "";
+  const phone = ((_e = data.sections.personal) == null ? void 0 : _e.phone) || "";
+  const github = ((_f = data.sections.personal) == null ? void 0 : _f.github) || "";
+  const contactParts = [email, phone, github].filter(Boolean);
+  const contactHtml = contactParts.length > 0 ? `<div class="resume-contact">${contactParts.map((p) => `<span>${htmlEscapedText(p)}</span>`).join("")}</div>` : "";
+  const headerHtml = `<div class="resume-header">
+    <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+    ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+    ${contactHtml}
+  </div>`;
+  if (theme.layout === "two-column") {
+    const sidebarSections = ["personal", "skills"];
+    const sidebarHtml = renderSections(template, data, theme, sidebarSections);
+    const mainHtml = renderSections(template, data, theme, null);
+    const footerHtml2 = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
+    return `<div class="resume-two-column">
+      <div class="resume-sidebar" style="padding:${s.pagePadding}">
+        ${headerHtml}
+        ${sidebarHtml}
+      </div>
+      <div class="resume-main" style="padding:${s.pagePadding}">
+        ${mainHtml}
+        ${footerHtml2}
+      </div>
+    </div>`;
+  }
+  const sectionsHtml = renderSections(template, data, theme, null);
+  const footerHtml = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
+  return `<div style="padding:${s.pagePadding};background:${c.background}">
+    ${headerHtml}
+    ${sectionsHtml}
+    ${footerHtml}
+  </div>`;
+}
+function renderResumeDocument(data, template, theme, title = "简历") {
+  const css = renderResumeCSS(theme);
+  const body = renderResumeBody(data, template, theme);
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>${htmlEscapedText(title)}</title>
+<style>${css}</style></head>
+<body>${body}</body></html>`;
+}
 const Store = require("electron-store");
 const store = new Store({ encryptionKey: "resume-ai-local" });
 function getResumes() {
@@ -353,150 +602,16 @@ function readVisualTheme(name) {
   const p = path.join(dir, `${name}.json`);
   return readJSONSafe(p);
 }
-function getDefaultVisualTheme() {
-  const defaultTheme = readVisualTheme("modern-blue");
-  if (defaultTheme) return defaultTheme;
-  return {
-    name: "modern-blue",
-    label: "现代蓝",
+function generateHTML(data, template, visualThemeName) {
+  var _a, _b;
+  const theme = visualThemeName && readVisualTheme(visualThemeName) || readVisualTheme("modern-blue") || {
     layout: "single-column",
     colors: { primary: "#1a56db", primaryLight: "#e8effd", text: "#1f2937", textMuted: "#6b7280", background: "#ffffff", border: "#e5e7eb" },
     typography: { nameFontSize: "24px", titleFontSize: "14px", sectionTitleFontSize: "13px", bodyFontSize: "11px", fontFamily: "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif", lineHeight: "1.6" },
     sectionStyle: "underlined",
     spacing: { pagePadding: "40px", sectionGap: "20px", entryGap: "10px" }
   };
-}
-function generateFieldHtml(field, value) {
-  const lines = value.split("\n").filter((l) => l.trim());
-  const formatted = lines.map((l) => `<p style="margin:0 0 2px 0;line-height:1.6">${l}</p>`).join("");
-  return `<div style="margin-bottom:6px"><strong>${field.label}:</strong> ${formatted}</div>`;
-}
-function generateExtraFieldHtml(key, value, section) {
-  var _a, _b;
-  const label = ((_b = (_a = section == null ? void 0 : section.fields) == null ? void 0 : _a.find((f) => f.id === key)) == null ? void 0 : _b.label) || key;
-  return `<div style="margin-bottom:6px"><strong>${label}:</strong> ${value}</div>`;
-}
-function generateSectionFieldsHtml(section, sectionData) {
-  const fieldsHtml = section.fields.map((field) => {
-    const value = sectionData[field.id];
-    if (!value) return "";
-    return generateFieldHtml(field, value);
-  }).filter(Boolean).join("");
-  const extraFieldsHtml = Object.entries(sectionData).filter(([k]) => !section.fields.some((f) => f.id === k)).filter(([, v]) => v).map(([k, v]) => generateExtraFieldHtml(k, v, section)).join("");
-  return fieldsHtml + extraFieldsHtml;
-}
-function generateSectionHtml(section, sectionData, theme, sidebarSections) {
-  const fieldsHtml = generateSectionFieldsHtml(section, sectionData);
-  if (!fieldsHtml) return "";
-  const isSidebar = sidebarSections.includes(section.id);
-  const sectionTitleColor = isSidebar ? theme.colors.sidebarText || theme.colors.primary : theme.colors.primary;
-  let titleStyle = "";
-  if (theme.sectionStyle === "underlined") {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${sectionTitleColor};border-bottom:2px solid ${theme.colors.primary};padding-bottom:3px;margin-bottom:6px`;
-  } else if (theme.sectionStyle === "colored-bg") {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${theme.colors.background};background:${theme.colors.primary};padding:4px 8px;margin-bottom:6px;border-radius:3px`;
-  } else {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${sectionTitleColor};margin-bottom:6px`;
-  }
-  return `<div style="margin-bottom:${theme.spacing.sectionGap};page-break-inside:avoid">
-    <h2 style="${titleStyle}">${section.label}</h2>
-    ${fieldsHtml}
-  </div>`;
-}
-function generateSidebarHtml(data, template, theme) {
-  var _a, _b;
-  const sidebarSections = ["personal", "skills"];
-  const parts = [];
-  for (const sectionId of sidebarSections) {
-    const sectionData = (_a = data.sections) == null ? void 0 : _a[sectionId];
-    const section = (_b = template.sections) == null ? void 0 : _b.find((s) => s.id === sectionId);
-    if (!sectionData || !section) continue;
-    const html = generateSectionHtml(section, sectionData, theme, sidebarSections);
-    if (html) parts.push(html);
-  }
-  if (parts.length === 0) return "";
-  return parts.join("");
-}
-function generateMainHtml(data, template, theme) {
-  var _a;
-  const sidebarSections = ["personal", "skills"];
-  const parts = [];
-  for (const section of template.sections || []) {
-    if (sidebarSections.includes(section.id)) continue;
-    const sectionData = (_a = data.sections) == null ? void 0 : _a[section.id];
-    if (!sectionData) continue;
-    const html = generateSectionHtml(section, sectionData, theme, sidebarSections);
-    if (html) parts.push(html);
-  }
-  return parts.join("");
-}
-function generateHTML(data, template, visualThemeName) {
-  var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
-  const theme = visualThemeName && readVisualTheme(visualThemeName) || getDefaultVisualTheme();
-  const name = ((_b = (_a = data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "简历";
-  const title = ((_d = (_c = data.sections) == null ? void 0 : _c.personal) == null ? void 0 : _d.title) || "";
-  const email = ((_f = (_e = data.sections) == null ? void 0 : _e.personal) == null ? void 0 : _f.email) || "";
-  const phone = ((_h = (_g = data.sections) == null ? void 0 : _g.personal) == null ? void 0 : _h.phone) || "";
-  const github = ((_j = (_i = data.sections) == null ? void 0 : _i.personal) == null ? void 0 : _j.github) || "";
-  const t = theme.typography;
-  const c = theme.colors;
-  const s = theme.spacing;
-  if (theme.layout === "two-column") {
-    const sidebarContent = generateSidebarHtml(data, template, theme);
-    const mainContent = generateMainHtml(data, template, theme);
-    return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${name} - 简历</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  .page { display:flex; min-height:100vh; }
-  .sidebar { width:35%; background:${c.sidebarBg || c.primary}; color:${c.sidebarText || "#fff"}; padding:${s.pagePadding}; }
-  .sidebar h2 { border-bottom-color: ${c.sidebarText || "#fff"} !important; }
-  .sidebar .label { color: ${c.sidebarText || "#fff"} !important; }
-  .main { width:65%; padding:${s.pagePadding}; }
-  .header { text-align:center; margin-bottom:20px; }
-  .header .name { font-size:${t.nameFontSize}; font-weight:bold; color:${c.text}; }
-  .header .title-text { font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; }
-  .header .contact { font-size:11px; color:${c.textMuted}; margin-top:8px; }
-</style></head>
-<body>
-  <div class="page">
-    <div class="sidebar">
-      <div class="header" style="margin-bottom:24px">
-        <div style="font-size:${t.nameFontSize};font-weight:bold;color:${c.sidebarText || "#fff"}">${name}</div>
-        ${title ? `<div style="font-size:${t.titleFontSize};color:${c.sidebarText || "#fff"}cc;margin-top:4px">${title}</div>` : ""}
-        <div style="font-size:10px;color:${c.sidebarText || "#fff"}99;margin-top:8px">${[email, phone, github].filter(Boolean).join(" | ")}</div>
-      </div>
-      ${sidebarContent}
-    </div>
-    <div class="main">
-      ${mainContent}
-    </div>
-  </div>
-</body></html>`;
-  }
-  const sectionsHtml = (template.sections || []).map((section) => {
-    var _a2;
-    const sectionData = (_a2 = data.sections) == null ? void 0 : _a2[section.id];
-    if (!sectionData) return "";
-    return generateSectionHtml(section, sectionData, theme, []);
-  }).filter(Boolean).join("");
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${name} - 简历</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; max-width:800px; margin:0 auto; padding:${s.pagePadding}; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style></head>
-<body>
-  <div style="text-align:center;margin-bottom:20px">
-    <h1 style="font-size:${t.nameFontSize};margin:0;color:${c.text}">${name}</h1>
-    ${title ? `<p style="font-size:${t.titleFontSize};color:${c.textMuted};margin-top:4px">${title}</p>` : ""}
-    <p style="font-size:11px;color:${c.textMuted};margin-top:8px">${[email, phone, github].filter(Boolean).join(" | ")}</p>
-  </div>
-  ${sectionsHtml}
-</body></html>`;
+  return renderResumeDocument(data, template, theme, `${((_b = (_a = data == null ? void 0 : data.sections) == null ? void 0 : _a.personal) == null ? void 0 : _b.name) || "简历"} - 简历`);
 }
 function readTemplateJSON(name) {
   const templatesDir = getTemplatesDir();

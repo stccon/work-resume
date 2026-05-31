@@ -56,3 +56,6 @@ tsconfig.tsbuildinfo
 
 # Testing
 .jest-cache/
+
+# Generated PDF exports
+resumes/

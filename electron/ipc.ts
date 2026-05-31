@@ -9,6 +9,7 @@ import {
   getVisualTemplatesDir,
   generateResumeFileName,
 } from "./paths"
+import { renderResumeDocument } from "../src/lib/resume-renderer"
 
 const Store = require("electron-store")
 const store = new Store({ encryptionKey: "resume-ai-local" })
@@ -49,176 +50,14 @@ function readVisualTheme(name: string): any | null {
   return readJSONSafe(p)
 }
 
-function getDefaultVisualTheme(): any {
-  const defaultTheme = readVisualTheme("modern-blue")
-  if (defaultTheme) return defaultTheme
-  return {
-    name: "modern-blue",
-    label: "现代蓝",
-    layout: "single-column",
+function generateHTML(data: any, template: any, visualThemeName?: string): string {
+  const theme = (visualThemeName && readVisualTheme(visualThemeName)) || readVisualTheme("modern-blue") || {
+    name: "modern-blue", label: "现代蓝", layout: "single-column",
     colors: { primary: "#1a56db", primaryLight: "#e8effd", text: "#1f2937", textMuted: "#6b7280", background: "#ffffff", border: "#e5e7eb" },
     typography: { nameFontSize: "24px", titleFontSize: "14px", sectionTitleFontSize: "13px", bodyFontSize: "11px", fontFamily: "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif", lineHeight: "1.6" },
-    sectionStyle: "underlined",
-    spacing: { pagePadding: "40px", sectionGap: "20px", entryGap: "10px" },
+    sectionStyle: "underlined", spacing: { pagePadding: "40px", sectionGap: "20px", entryGap: "10px" },
   }
-}
-
-function generateFieldHtml(field: any, value: string): string {
-  const lines = value.split("\n").filter((l: string) => l.trim())
-  const formatted = lines.map((l: string) => `<p style="margin:0 0 2px 0;line-height:1.6">${l}</p>`).join("")
-  return `<div style="margin-bottom:6px"><strong>${field.label}:</strong> ${formatted}</div>`
-}
-
-function generateExtraFieldHtml(key: string, value: string, section: any): string {
-  const label = section?.fields?.find((f: any) => f.id === key)?.label || key
-  return `<div style="margin-bottom:6px"><strong>${label}:</strong> ${value}</div>`
-}
-
-function generateSectionFieldsHtml(section: any, sectionData: Record<string, string>): string {
-  const fieldsHtml = section.fields
-    .map((field: any) => {
-      const value = sectionData[field.id]
-      if (!value) return ""
-      return generateFieldHtml(field, value)
-    })
-    .filter(Boolean)
-    .join("")
-
-  const extraFieldsHtml = Object.entries(sectionData)
-    .filter(([k]) => !section.fields.some((f: any) => f.id === k))
-    .filter(([, v]) => v)
-    .map(([k, v]) => generateExtraFieldHtml(k, v as string, section))
-    .join("")
-
-  return fieldsHtml + extraFieldsHtml
-}
-
-function generateSectionHtml(section: any, sectionData: Record<string, string>, theme: any, sidebarSections: string[]): string {
-  const fieldsHtml = generateSectionFieldsHtml(section, sectionData)
-  if (!fieldsHtml) return ""
-
-  const isSidebar = sidebarSections.includes(section.id)
-  const sectionTitleColor = isSidebar ? theme.colors.sidebarText || theme.colors.primary : theme.colors.primary
-
-  let titleStyle = ""
-  if (theme.sectionStyle === "underlined") {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${sectionTitleColor};border-bottom:2px solid ${theme.colors.primary};padding-bottom:3px;margin-bottom:6px`
-  } else if (theme.sectionStyle === "colored-bg") {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${theme.colors.background};background:${theme.colors.primary};padding:4px 8px;margin-bottom:6px;border-radius:3px`
-  } else {
-    titleStyle = `font-size:${theme.typography.sectionTitleFontSize};font-weight:bold;color:${sectionTitleColor};margin-bottom:6px`
-  }
-
-  return `<div style="margin-bottom:${theme.spacing.sectionGap};page-break-inside:avoid">
-    <h2 style="${titleStyle}">${section.label}</h2>
-    ${fieldsHtml}
-  </div>`
-}
-
-function generateSidebarHtml(data: any, template: any, theme: any): string {
-  const sidebarSections = ["personal", "skills"]
-  const parts: string[] = []
-
-  for (const sectionId of sidebarSections) {
-    const sectionData = data.sections?.[sectionId]
-    const section = template.sections?.find((s: any) => s.id === sectionId)
-    if (!sectionData || !section) continue
-    const html = generateSectionHtml(section, sectionData, theme, sidebarSections)
-    if (html) parts.push(html)
-  }
-
-  if (parts.length === 0) return ""
-  return parts.join("")
-}
-
-function generateMainHtml(data: any, template: any, theme: any): string {
-  const sidebarSections = ["personal", "skills"]
-  const parts: string[] = []
-
-  for (const section of template.sections || []) {
-    if (sidebarSections.includes(section.id)) continue
-    const sectionData = data.sections?.[section.id]
-    if (!sectionData) continue
-    const html = generateSectionHtml(section, sectionData, theme, sidebarSections)
-    if (html) parts.push(html)
-  }
-
-  return parts.join("")
-}
-
-function generateHTML(data: any, template: any, visualThemeName?: string): string {
-  const theme = (visualThemeName && readVisualTheme(visualThemeName)) || getDefaultVisualTheme()
-  const name = data.sections?.personal?.name || "简历"
-  const title = data.sections?.personal?.title || ""
-  const email = data.sections?.personal?.email || ""
-  const phone = data.sections?.personal?.phone || ""
-  const github = data.sections?.personal?.github || ""
-
-  const t = theme.typography
-  const c = theme.colors
-  const s = theme.spacing
-
-  if (theme.layout === "two-column") {
-    const sidebarContent = generateSidebarHtml(data, template, theme)
-    const mainContent = generateMainHtml(data, template, theme)
-
-    return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${name} - 简历</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-  .page { display:flex; min-height:100vh; }
-  .sidebar { width:35%; background:${c.sidebarBg || c.primary}; color:${c.sidebarText || "#fff"}; padding:${s.pagePadding}; }
-  .sidebar h2 { border-bottom-color: ${c.sidebarText || "#fff"} !important; }
-  .sidebar .label { color: ${c.sidebarText || "#fff"} !important; }
-  .main { width:65%; padding:${s.pagePadding}; }
-  .header { text-align:center; margin-bottom:20px; }
-  .header .name { font-size:${t.nameFontSize}; font-weight:bold; color:${c.text}; }
-  .header .title-text { font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; }
-  .header .contact { font-size:11px; color:${c.textMuted}; margin-top:8px; }
-</style></head>
-<body>
-  <div class="page">
-    <div class="sidebar">
-      <div class="header" style="margin-bottom:24px">
-        <div style="font-size:${t.nameFontSize};font-weight:bold;color:${c.sidebarText || "#fff"}">${name}</div>
-        ${title ? `<div style="font-size:${t.titleFontSize};color:${c.sidebarText || "#fff"}cc;margin-top:4px">${title}</div>` : ""}
-        <div style="font-size:10px;color:${c.sidebarText || "#fff"}99;margin-top:8px">${[email, phone, github].filter(Boolean).join(" | ")}</div>
-      </div>
-      ${sidebarContent}
-    </div>
-    <div class="main">
-      ${mainContent}
-    </div>
-  </div>
-</body></html>`
-  }
-
-  const sectionsHtml = (template.sections || [])
-    .map((section: any) => {
-      const sectionData = data.sections?.[section.id]
-      if (!sectionData) return ""
-      return generateSectionHtml(section, sectionData, theme, [])
-    })
-    .filter(Boolean)
-    .join("")
-
-  return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${name} - 简历</title>
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; max-width:800px; margin:0 auto; padding:${s.pagePadding}; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-</style></head>
-<body>
-  <div style="text-align:center;margin-bottom:20px">
-    <h1 style="font-size:${t.nameFontSize};margin:0;color:${c.text}">${name}</h1>
-    ${title ? `<p style="font-size:${t.titleFontSize};color:${c.textMuted};margin-top:4px">${title}</p>` : ""}
-    <p style="font-size:11px;color:${c.textMuted};margin-top:8px">${[email, phone, github].filter(Boolean).join(" | ")}</p>
-  </div>
-  ${sectionsHtml}
-</body></html>`
+  return renderResumeDocument(data, template, theme, `${data?.sections?.personal?.name || "简历"} - 简历`)
 }
 
 function readTemplateJSON(name: string): any | null {
