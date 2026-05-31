@@ -6,7 +6,7 @@ import { log } from "./logger"
 import {
   getTemplatesDir,
   getResumesDir,
-  getVisualTemplatesDir,
+  getVisualThemesDir,
   generateResumeFileName,
 } from "./paths"
 import { renderResumeDocument } from "../src/lib/resume-renderer"
@@ -45,7 +45,7 @@ function writeJSONSafe(filePath: string, data: any): void {
 }
 
 function readVisualTheme(name: string): any | null {
-  const dir = getVisualTemplatesDir()
+  const dir = getVisualThemesDir()
   const p = path.join(dir, `${name}.json`)
   return readJSONSafe(p)
 }
@@ -74,10 +74,15 @@ export function setupIPC() {
     const win = BrowserWindow.fromWebContents(event.sender)
     try {
       const result = await sendPrompt(text, win)
-      return result
+      return { content: result.content, error: null, isQuotaError: false }
     } catch (err: any) {
       console.error("chat:send error:", err)
-      return { content: `（错误）${err.message || String(err)}` }
+      const isQuotaError = err.message?.includes('TOKEN_QUOTA_EXCEEDED')
+      return {
+        content: `（错误）${err.message || String(err)}`,
+        error: null,
+        isQuotaError
+      }
     }
   })
 
@@ -85,10 +90,15 @@ export function setupIPC() {
     const win = BrowserWindow.fromWebContents(event.sender)
     try {
       const result = await sendPrompt(prompt, win, true)
-      return result
+      return { content: result.content, error: null, isQuotaError: false }
     } catch (err: any) {
       console.error("chat:send-first-message error:", err)
-      return { content: `（错误）${err.message || String(err)}` }
+      const isQuotaError = err.message?.includes('TOKEN_QUOTA_EXCEEDED')
+      return {
+        content: `（错误）${err.message || String(err)}`,
+        error: null,
+        isQuotaError
+      }
     }
   })
 
@@ -155,7 +165,7 @@ export function setupIPC() {
   // ── Visual Theme IPC ──
 
   ipcMain.handle("visual-templates:list", async () => {
-    const dir = getVisualTemplatesDir()
+    const dir = getVisualThemesDir()
     if (!fs.existsSync(dir)) return []
     const files = fs.readdirSync(dir).filter((f: string) => f.endsWith(".json"))
     return files.map((f: string) => {

@@ -1,0 +1,38 @@
+{
+  "name": "emerald-sidebar",
+  "label": "翡翠侧栏",
+  "description": "现代双栏布局，深绿侧边栏突出个人信息与技能，主体区域清晰展示经历",
+  "layout": "two-column",
+  "headerStyle": "left",
+  "decorationStyle": "dot",
+  "colors": {
+    "primary": "#059669",
+    "primaryLight": "#ecfdf5",
+    "text": "#1e293b",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#d1d5db",
+    "sidebarBg": "#065f46",
+    "sidebarText": "#ffffff",
+    "sectionBg": "#f8fafc"
+  },
+  "fonts": {
+    "heading": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "22px",
+    "titleFontSize": "12px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "10.5px",
+    "lineHeight": "1.5"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "28px",
+    "sectionGap": "14px",
+    "entryGap": "8px"
+  },
+  "sidebarWidth": "33%",
+  "borderRadius": "4px"
+}

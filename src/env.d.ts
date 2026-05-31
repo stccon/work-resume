@@ -2,6 +2,8 @@
 
 interface SendMessageResult {
   content: string
+  error: any
+  isQuotaError: boolean
 }
 
 interface ChatChunk {

@@ -1,0 +1,35 @@
+{
+  "name": "glacier",
+  "label": "冰川",
+  "description": "清新自然风格，浅蓝主调，圆角卡片分区，适合设计师和产品经理",
+  "layout": "single-column",
+  "headerStyle": "centered",
+  "decorationStyle": "dot",
+  "colors": {
+    "primary": "#0ea5e9",
+    "primaryLight": "#f0f9ff",
+    "text": "#0f172a",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#e2e8f0",
+    "sectionBg": "#f8fafc"
+  },
+  "fonts": {
+    "heading": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "24px",
+    "titleFontSize": "13px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.6"
+  },
+  "sectionStyle": "card",
+  "spacing": {
+    "pagePadding": "36px",
+    "sectionGap": "16px",
+    "entryGap": "9px"
+  },
+  "borderRadius": "10px"
+}

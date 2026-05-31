@@ -272,7 +272,14 @@ ${prefix}${text}` : text;
         (_, reject) => setTimeout(() => reject(new Error("AI 响应超时（60秒）")), 6e4)
       )
     ]);
-    if (result.error) throw new Error(JSON.stringify(result.error));
+    if (result.error) {
+      const errorMsg = JSON.stringify(result.error);
+      const isQuotaError = QUOTA_ERROR_PATTERNS.some((pattern) => pattern.test(errorMsg));
+      if (isQuotaError) {
+        throw new Error("TOKEN_QUOTA_EXCEEDED: token 配额不足，请充值后重试");
+      }
+      throw new Error(errorMsg);
+    }
     const parts = ((_a = result.data) == null ? void 0 : _a.parts) || [];
     const content = parts.filter((p) => p.type === "text").map((p) => p.text).join("");
     log("prompt-result", `parts=${parts.length} contentLen=${content.length}`);
@@ -290,6 +297,18 @@ function setModel(model) {
 function getCurrentModel() {
   return currentModel;
 }
+const QUOTA_ERROR_PATTERNS = [
+  /insufficient balance/i,
+  /insufficient credit/i,
+  /quota exceeded/i,
+  /quota limit/i,
+  /payment required/i,
+  /out of tokens/i,
+  /balance not enough/i,
+  /credit.*not.*available/i,
+  /subscription.*expired/i,
+  /expired account/i
+];
 async function getModels() {
   var _a;
   try {
@@ -309,7 +328,7 @@ async function getModels() {
 }
 function getBaseDir() {
   if (electron.app.isPackaged) {
-    return path.join(electron.app.getPath("userData"), "resume-ai");
+    return electron.app.getPath("userData");
   }
   return path.join(__dirname, "..");
 }
@@ -329,55 +348,103 @@ function generateResumeFileName(userName, templateLabel) {
   const date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   return `${userName}_${templateLabel}_${date}.pdf`;
 }
-function getVisualTemplatesDir() {
-  return ensureDir(path.join(getBaseDir(), "visual-templates"));
+function getVisualThemesDir() {
+  return ensureDir(path.join(getBaseDir(), "themes"));
 }
 function renderResumeCSS(theme) {
   const c = theme.colors;
   const t = theme.typography;
   const s = theme.spacing;
+  const f = theme.fonts;
+  const r = theme.borderRadius;
   return `* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: ${t.fontFamily}; font-size: ${t.bodyFontSize}; color: ${c.text}; line-height: ${t.lineHeight}; }
-@media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
-.resume-header { text-align:center; margin-bottom:20px; }
-.resume-name { font-size:${t.nameFontSize}; font-weight:700; color:${c.text}; margin:0; }
-.resume-title { font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; }
-.resume-contact { font-size:11px; color:${c.textMuted}; margin-top:8px; display:flex; justify-content:center; gap:12px; }
+body { font-family:${f.body}; font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; background:${c.background}; }
+
+@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+
+.resume-header { margin-bottom:20px; }
+.resume-header.centered { text-align:center; }
+.resume-header.left { text-align:left; }
+.resume-header.colored-bar { text-align:center; background:${c.headerBg || c.primary}; padding:${s.pagePadding}; margin:-${s.pagePadding}; margin-bottom:20px; }
+.resume-header.colored-bar .resume-name { color:${c.headerText || "#fff"}; }
+.resume-header.colored-bar .resume-title { color:${c.headerText ? `${c.headerText}cc` : "#ffffffcc"}; }
+.resume-header.colored-bar .resume-contact { color:${c.headerText ? `${c.headerText}99` : "#ffffff99"}; }
+
+.resume-name { font-family:${f.heading}; font-size:${t.nameFontSize}; font-weight:700; color:${c.text}; margin:0; }
+.resume-title { font-family:${f.heading}; font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; }
+.resume-contact { font-size:11px; color:${c.textMuted}; margin-top:8px; display:flex; flex-wrap:wrap; gap:8px 16px; }
+.resume-header.centered .resume-contact { justify-content:center; }
+.resume-header.left .resume-contact { justify-content:flex-start; }
+
 .resume-section { margin-bottom:${s.sectionGap}; }
-.resume-section-title { margin-bottom:8px; }
+.resume-section.card { background:${c.sectionBg || c.primaryLight}; border-radius:${r}; padding:12px 16px; }
+
+.resume-section-title { margin-bottom:8px; font-family:${f.heading}; }
 .resume-section-title.underlined { font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.primary}; border-bottom:2px solid ${c.primary}; padding-bottom:4px; }
-.resume-section-title.colored-bg { font-size:${t.sectionTitleFontSize}; font-weight:700; color:#fff; background:${c.primary}; padding:4px 10px; border-radius:4px; }
+.resume-section-title.underlined.dot { border-bottom:none; padding-bottom:0; }
+.resume-section-title.underlined.dot::after { display:block; content:""; width:40px; height:3px; background:${c.primary}; border-radius:2px; margin-top:4px; }
+.resume-section-title.underlined.dot.centered::after { margin:4px auto 0; }
+.resume-section-title.colored-bg { font-size:${t.sectionTitleFontSize}; font-weight:700; color:#fff; background:${c.primary}; padding:4px 10px; border-radius:${r}; }
+.resume-section-title.colored-bg.dot { background:none; color:${c.text}; padding:0; }
+.resume-section-title.colored-bg.dot::before { content:"●"; color:${c.primary}; margin-right:6px; font-size:10px; }
 .resume-section-title.minimal { font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.text}; }
+.resume-section-title.minimal.dot::before { content:"●"; color:${c.primary}; margin-right:6px; font-size:10px; }
+
 .resume-body-text { font-size:${t.bodyFontSize}; line-height:${t.lineHeight}; white-space:pre-wrap; }
-.resume-field-row { display:flex; margin-bottom:4px; font-size:${t.bodyFontSize}; }
-.resume-field-label { color:${c.textMuted}; width:96px; flex-shrink:0; }
+
+.resume-field-row { display:flex; margin-bottom:3px; font-size:${t.bodyFontSize}; line-height:1.5; }
+.resume-field-label { color:${c.textMuted}; width:88px; flex-shrink:0; }
 .resume-field-value { color:${c.text}; }
+
 .resume-entry { margin-bottom:${s.entryGap}; }
 .resume-entry-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px; }
-.resume-entry-main-title { font-weight:600; font-size:${t.bodyFontSize}; color:${c.text}; }
-.resume-entry-subtitle { font-size:11px; color:${c.textMuted}; }
+.resume-entry-main-title { font-family:${f.heading}; font-weight:600; font-size:${t.bodyFontSize}; color:${c.text}; }
+.resume-entry-subtitle { font-size:11px; color:${c.textMuted}; margin-top:1px; }
 .resume-entry-date { font-size:11px; color:${c.textMuted}; white-space:nowrap; margin-left:12px; }
-.resume-entry-detail { font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; margin-top:6px; white-space:pre-wrap; }
-.resume-entry-extra { display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:4px; }
-.resume-entry-extra-item { font-size:11px; color:${c.textMuted}; }
+.resume-entry-divider { border:none; border-top:1px solid ${c.border}; margin:${s.entryGap} 0; }
+
+.resume-prose { margin:6px 0; }
+.resume-prose p { margin-bottom:4px; line-height:${t.lineHeight}; }
+
+.resume-bullets { margin:4px 0; padding:0; list-style:none; }
+.resume-bullets li { position:relative; padding-left:14px; margin-bottom:3px; font-size:${t.bodyFontSize}; line-height:1.5; }
+.resume-bullets li::before { content:"•"; position:absolute; left:0; color:${c.primary}; font-weight:700; }
+
+.resume-tags { display:flex; flex-wrap:wrap; gap:4px 6px; margin:4px 0; }
+.resume-tag { display:inline-block; background:${c.primaryLight}; color:${c.primary}; padding:1px 8px; border-radius:999px; font-size:10px; font-family:${f.body}; line-height:1.6; }
+
 .resume-two-column { display:flex; min-height:100vh; }
-.resume-sidebar { width:35%; background:${c.sidebarBg || c.primary}; padding:${s.pagePadding}; }
+.resume-sidebar { background:${c.sidebarBg || c.primary}; padding:${s.pagePadding}; }
 .resume-sidebar .resume-name { color:${c.sidebarText || "#fff"}; }
 .resume-sidebar .resume-title { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
 .resume-sidebar .resume-contact { color:${c.sidebarText ? `${c.sidebarText}99` : "#ffffff99"}; }
-.resume-sidebar .resume-section-title { color:${c.sidebarText || "#fff"}; border-bottom-color:${c.sidebarText || "#fff"} !important; }
+.resume-sidebar .resume-section-title { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-section-title.underlined { border-bottom-color:${c.sidebarText ? `${c.sidebarText}66` : "#ffffff66"}; }
+.resume-sidebar .resume-section-title.colored-bg { background:${c.sidebarText ? `${c.sidebarText}22` : "#ffffff22"}; color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-section-title.underlined.dot::after { background:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-section-title.minimal.dot::before,
+.resume-sidebar .resume-section-title.colored-bg.dot::before { color:${c.sidebarText || "#fff"}; }
 .resume-sidebar .resume-field-label { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; width:80px; }
 .resume-sidebar .resume-field-value { color:${c.sidebarText || "#fff"}; }
 .resume-sidebar .resume-entry-main-title { color:${c.sidebarText || "#fff"}; }
 .resume-sidebar .resume-entry-subtitle { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
 .resume-sidebar .resume-entry-date { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
-.resume-sidebar .resume-entry-detail { color:${c.sidebarText || "#fff"}; }
-.resume-sidebar .resume-entry-extra-item { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
-.resume-main { width:65%; padding:${s.pagePadding}; background:${c.background}; }
+.resume-sidebar .resume-entry-divider { border-top-color:${c.sidebarText ? `${c.sidebarText}33` : "#ffffff33"}; }
+.resume-sidebar .resume-tag { background:${c.sidebarText ? `${c.sidebarText}22` : "#ffffff22"}; color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-bullets li::before { color:${c.sidebarText || "#fff"}; }
+.resume-sidebar .resume-prose { color:${c.sidebarText || "#fff"}; }
+.resume-skills-overview { margin-bottom:8px; }
+.resume-skills-category { margin-bottom:6px; display:flex; align-items:flex-start; gap:8px; }
+.resume-skills-cat-label { font-size:${t.bodyFontSize}; color:${c.textMuted}; white-space:nowrap; min-width:60px; flex-shrink:0; }
+.resume-sidebar .resume-skills-cat-label { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-main { background:${c.background}; padding:${s.pagePadding}; }
 .resume-footer { text-align:center; font-size:10px; color:${c.textMuted}; margin-top:24px; padding-top:12px; border-top:1px solid ${c.border}; }`;
 }
 function sectionTitleClass(theme) {
-  return `resume-section-title ${theme.sectionStyle}`;
+  const base = `resume-section-title ${theme.sectionStyle}`;
+  const deco = theme.decorationStyle === "line" && theme.sectionStyle === "underlined" ? "" : theme.decorationStyle;
+  const centered = theme.headerStyle === "centered" && theme.decorationStyle === "dot" ? " centered" : "";
+  return deco ? `${base} ${deco}${centered}` : base;
 }
 function htmlEscapedText(v) {
   return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -416,9 +483,77 @@ function getFieldLabel(section, fieldId) {
   }
   return htmlEscapedText(fieldId);
 }
-function formatLines(value) {
-  const lines = value.split("\n").filter((l) => l.trim());
-  return lines.map((l) => `<p style="margin:0 0 2px 0">${htmlEscapedText(l)}</p>`).join("");
+function classifyField(fieldId) {
+  const k = fieldId.toLowerCase();
+  if (k.includes("detail") || k.includes("description") || k.includes("summary")) return "prose";
+  if (k.includes("achievement") || k.includes("accomplishment") || k.includes("highlight") || k.includes("responsibility") || k.includes("responsibilities")) return "bullet-list";
+  if (k.includes("tech") || k.includes("skill") || k.includes("tool") || k.includes("stack") || k.includes("keyword") || k.includes("language")) return "tags";
+  return "label-value";
+}
+function renderProse(value) {
+  const s = formatValue(value);
+  const lines = s.split("\n").filter((l) => l.trim());
+  return `<div class="resume-prose">${lines.map((l) => `<p>${l}</p>`).join("")}</div>`;
+}
+function renderBulletList(value) {
+  const s = formatValue(value);
+  const lines = s.split("\n").filter((l) => l.trim());
+  return `<ul class="resume-bullets">${lines.map((l) => `<li>${l}</li>`).join("")}</ul>`;
+}
+function renderTags(value) {
+  const s = formatValue(value);
+  const items = s.split(/[,，、\n]/).map((s2) => s2.trim()).filter(Boolean);
+  return `<div class="resume-tags">${items.map((t) => `<span class="resume-tag">${t}</span>`).join("")}</div>`;
+}
+function renderLabelledField(label, value) {
+  return `<div class="resume-field-row"><span class="resume-field-label">${label}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`;
+}
+function renderSkillsSection(section, sectionData, theme, sidebar) {
+  const c = theme.colors;
+  const t = theme.typography;
+  theme.fonts;
+  const categoryGroups = /* @__PURE__ */ new Map();
+  const templateLabels = /* @__PURE__ */ new Map();
+  for (const field of section.fields || []) {
+    templateLabels.set(field.id, field.label);
+  }
+  const overviewHtml = [];
+  for (const [key, value] of Object.entries(sectionData)) {
+    if (!value) continue;
+    const m = key.match(/^([a-zA-Z]+)_(\d+)$/);
+    if (m) {
+      const category = m[1];
+      if (!categoryGroups.has(category)) categoryGroups.set(category, []);
+      categoryGroups.get(category).push(value);
+      continue;
+    }
+    const label = templateLabels.get(key);
+    if (label && key !== "skills" && !label.includes("概述")) {
+      const items = value.split(/[,，、\n]/).map((s) => s.trim()).filter(Boolean);
+      if (!categoryGroups.has(key)) categoryGroups.set(key, []);
+      for (const item of items) {
+        categoryGroups.get(key).push(item);
+      }
+      continue;
+    }
+    overviewHtml.push(`<p class="resume-body-text">${formatValue(value)}</p>`);
+  }
+  const parts = [];
+  if (overviewHtml.length > 0) {
+    parts.push(`<div class="resume-skills-overview" style="margin-bottom:8px">${overviewHtml.join("")}</div>`);
+  }
+  for (const [cat, values] of categoryGroups) {
+    const catLabel = templateLabels.get(cat) || getFieldLabel(section, cat);
+    const tagsHtml = values.map((v) => `<span class="resume-tag">${htmlEscapedText(v)}</span>`).join("");
+    const catLabelStyle = sidebar ? `font-size:${t.bodyFontSize};color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"};white-space:nowrap;min-width:60px` : `font-size:${t.bodyFontSize};color:${c.textMuted};white-space:nowrap;min-width:60px`;
+    parts.push(`<div class="resume-skills-category" style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">
+      <span class="resume-skills-cat-label" style="${catLabelStyle}">${catLabel}：</span>
+      <div class="resume-tags" style="margin:0">
+        ${tagsHtml}
+      </div>
+    </div>`);
+  }
+  return `<div class="resume-section-content">${parts.join("")}</div>`;
 }
 function isMultiEntry(fields) {
   const keys = Object.keys(fields);
@@ -451,25 +586,19 @@ function groupFieldsByEntry(fields) {
 function renderSectionContent(section, sectionData, theme, sidebar = false) {
   var _a;
   const isSummary = section.id === "summary";
-  const isSkills = section.id === "skills";
   const isMulti = ["experience", "education", "projects"].includes(section.id) && isMultiEntry(sectionData);
+  const isSkills = section.id === "skills";
   if (isSummary) {
     const text = Object.values(sectionData)[0];
     if (!text) return "";
     return `<p class="resume-body-text">${formatValue(text)}</p>`;
   }
   if (isSkills) {
-    const parts2 = [];
-    for (const field of section.fields || []) {
-      const value = sectionData[field.id];
-      if (!value) continue;
-      parts2.push(`<div class="resume-field-row"><span class="resume-field-label">${htmlEscapedText(field.label)}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`);
-    }
-    return `<div class="resume-section-content">${parts2.join("")}</div>`;
+    return renderSkillsSection(section, sectionData, theme, sidebar);
   }
   if (isMulti) {
     const entries = groupFieldsByEntry(sectionData);
-    const parts2 = entries.map((entry) => {
+    const parts2 = entries.map((entry, ei) => {
       const titleKey = section.id === "experience" ? "position" : section.id === "education" ? "school" : "name";
       const subtitleKey = section.id === "experience" ? "company" : section.id === "education" ? "major" : "";
       const hasDate = entry.fields.date || entry.fields.startDate || entry.fields.endDate;
@@ -477,9 +606,28 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
       const mainTitle = entry.fields[titleKey] || "";
       const subTitle = subtitleKey && entry.fields[subtitleKey] ? entry.fields[subtitleKey] : "";
       const detail = entry.fields.detail || "";
-      const extraKeys = Object.keys(entry.fields).filter(
-        (k) => k !== titleKey && k !== subtitleKey && k !== "detail" && k !== "date" && k !== "startDate" && k !== "endDate"
-      );
+      const knownKeys = /* @__PURE__ */ new Set([titleKey, subtitleKey, "detail", "date", "startDate", "endDate"]);
+      const extraKeys = Object.keys(entry.fields).filter((k) => !knownKeys.has(k));
+      const grouped = { prose: [], bullets: [], tags: [], labelled: { keys: [], labels: [] } };
+      for (const k of extraKeys) {
+        const v = entry.fields[k];
+        if (!v) continue;
+        const type = classifyField(k);
+        if (type === "prose") {
+          grouped.prose.push(v);
+          continue;
+        }
+        if (type === "bullet-list") {
+          grouped.bullets.push(v);
+          continue;
+        }
+        if (type === "tags") {
+          grouped.tags.push(v);
+          continue;
+        }
+        grouped.labelled.keys.push(k);
+        grouped.labelled.labels.push(getFieldLabel(section, k));
+      }
       let html = `<div class="resume-entry">`;
       if (mainTitle || hasDate) {
         html += `<div class="resume-entry-header">`;
@@ -491,16 +639,24 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
         html += `</div>`;
       }
       if (detail) {
-        html += `<div class="resume-entry-detail">${formatLines(detail)}</div>`;
+        html += renderProse(detail);
       }
-      if (extraKeys.length > 0) {
-        html += `<div class="resume-entry-extra">`;
-        for (const k of extraKeys) {
-          html += `<div class="resume-entry-extra-item"><span>${getFieldLabel(section, k)}：</span><span>${formatValue(entry.fields[k])}</span></div>`;
-        }
-        html += `</div>`;
+      for (const v of grouped.bullets) {
+        html += renderBulletList(v);
+      }
+      for (const v of grouped.prose) {
+        html += renderProse(v);
+      }
+      for (const v of grouped.tags) {
+        html += renderTags(v);
+      }
+      for (let i = 0; i < grouped.labelled.keys.length; i++) {
+        html += renderLabelledField(grouped.labelled.labels[i], entry.fields[grouped.labelled.keys[i]]);
       }
       html += `</div>`;
+      if (ei < entries.length - 1) {
+        html += `<hr class="resume-entry-divider" />`;
+      }
       return html;
     });
     return `<div class="resume-section-content">${parts2.join("")}</div>`;
@@ -526,7 +682,8 @@ function renderSections(template, data, theme, sectionIds) {
     if (!sectionData || Object.keys(sectionData).length === 0) continue;
     const content = renderSectionContent(section, sectionData, theme, false);
     if (!content) continue;
-    parts.push(`<div class="resume-section">
+    const sectionClass = theme.sectionStyle === "card" ? "resume-section card" : "resume-section";
+    parts.push(`<div class="${sectionClass}">
       <div class="${sectionTitleClass(theme)}">${htmlEscapedText(section.label)}</div>
       ${content}
     </div>`);
@@ -535,7 +692,7 @@ function renderSections(template, data, theme, sectionIds) {
 }
 function renderResumeBody(data, template, theme) {
   var _a, _b, _c, _d, _e, _f;
-  const c = theme.colors;
+  theme.colors;
   const s = theme.spacing;
   const name = ((_a = data.sections.personal) == null ? void 0 : _a.name) || ((_b = data.sections.personal) == null ? void 0 : _b.title) || "简历";
   const title = ((_c = data.sections.personal) == null ? void 0 : _c.title) || "";
@@ -544,7 +701,7 @@ function renderResumeBody(data, template, theme) {
   const github = ((_f = data.sections.personal) == null ? void 0 : _f.github) || "";
   const contactParts = [email, phone, github].filter(Boolean);
   const contactHtml = contactParts.length > 0 ? `<div class="resume-contact">${contactParts.map((p) => `<span>${htmlEscapedText(p)}</span>`).join("")}</div>` : "";
-  const headerHtml = `<div class="resume-header">
+  const headerHtml = `<div class="resume-header ${theme.headerStyle}">
     <h1 class="resume-name">${htmlEscapedText(name)}</h1>
     ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
     ${contactHtml}
@@ -554,8 +711,9 @@ function renderResumeBody(data, template, theme) {
     const sidebarHtml = renderSections(template, data, theme, sidebarSections);
     const mainHtml = renderSections(template, data, theme, null);
     const footerHtml2 = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
+    const sw = theme.sidebarWidth || "35%";
     return `<div class="resume-two-column">
-      <div class="resume-sidebar" style="padding:${s.pagePadding}">
+      <div class="resume-sidebar" style="width:${sw};padding:${s.pagePadding}">
         ${headerHtml}
         ${sidebarHtml}
       </div>
@@ -567,7 +725,7 @@ function renderResumeBody(data, template, theme) {
   }
   const sectionsHtml = renderSections(template, data, theme, null);
   const footerHtml = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
-  return `<div style="padding:${s.pagePadding};background:${c.background}">
+  return `<div style="padding:${s.pagePadding}">
     ${headerHtml}
     ${sectionsHtml}
     ${footerHtml}
@@ -598,7 +756,7 @@ function readJSONSafe(filePath) {
   }
 }
 function readVisualTheme(name) {
-  const dir = getVisualTemplatesDir();
+  const dir = getVisualThemesDir();
   const p = path.join(dir, `${name}.json`);
   return readJSONSafe(p);
 }
@@ -623,23 +781,35 @@ function readTemplateJSON(name) {
 }
 function setupIPC() {
   electron.ipcMain.handle("chat:send", async (event, text) => {
+    var _a;
     const win = electron.BrowserWindow.fromWebContents(event.sender);
     try {
       const result = await sendPrompt(text, win);
-      return result;
+      return { content: result.content, error: null, isQuotaError: false };
     } catch (err) {
       console.error("chat:send error:", err);
-      return { content: `（错误）${err.message || String(err)}` };
+      const isQuotaError = (_a = err.message) == null ? void 0 : _a.includes("TOKEN_QUOTA_EXCEEDED");
+      return {
+        content: `（错误）${err.message || String(err)}`,
+        error: null,
+        isQuotaError
+      };
     }
   });
   electron.ipcMain.handle("chat:send-first-message", async (event, prompt) => {
+    var _a;
     const win = electron.BrowserWindow.fromWebContents(event.sender);
     try {
       const result = await sendPrompt(prompt, win, true);
-      return result;
+      return { content: result.content, error: null, isQuotaError: false };
     } catch (err) {
       console.error("chat:send-first-message error:", err);
-      return { content: `（错误）${err.message || String(err)}` };
+      const isQuotaError = (_a = err.message) == null ? void 0 : _a.includes("TOKEN_QUOTA_EXCEEDED");
+      return {
+        content: `（错误）${err.message || String(err)}`,
+        error: null,
+        isQuotaError
+      };
     }
   });
   electron.ipcMain.handle("chat:set-context", async (_event, context) => {
@@ -690,7 +860,7 @@ function setupIPC() {
     return readTemplateJSON(name);
   });
   electron.ipcMain.handle("visual-templates:list", async () => {
-    const dir = getVisualTemplatesDir();
+    const dir = getVisualThemesDir();
     if (!fs.existsSync(dir)) return [];
     const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
     return files.map((f) => {
@@ -868,11 +1038,11 @@ function copyJsonDir(srcDir, targetDir) {
 function ensureDirectories() {
   getTemplatesDir();
   getResumesDir();
-  getVisualTemplatesDir();
+  getVisualThemesDir();
   const devTemplates = path.join(__dirname, "..", "templates");
   copyJsonDir(devTemplates, getTemplatesDir());
-  const devVisualTemplates = path.join(__dirname, "..", "visual-templates", "themes");
-  copyJsonDir(devVisualTemplates, getVisualTemplatesDir());
+  const devVisualTemplates = path.join(__dirname, "..", "themes");
+  copyJsonDir(devVisualTemplates, getVisualThemesDir());
 }
 function createWindow() {
   mainWindow = new electron.BrowserWindow({

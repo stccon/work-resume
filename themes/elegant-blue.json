@@ -1,0 +1,34 @@
+{
+  "name": "elegant-blue",
+  "label": "典雅蓝",
+  "description": "经典商务风格，深蓝主调，精致底线装饰，适合金融、咨询、法律等行业",
+  "layout": "single-column",
+  "headerStyle": "centered",
+  "decorationStyle": "dot",
+  "colors": {
+    "primary": "#1a56db",
+    "primaryLight": "#eef2ff",
+    "text": "#1e293b",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#e2e8f0"
+  },
+  "fonts": {
+    "heading": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "26px",
+    "titleFontSize": "14px",
+    "sectionTitleFontSize": "13px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.6"
+  },
+  "sectionStyle": "underlined",
+  "spacing": {
+    "pagePadding": "40px",
+    "sectionGap": "18px",
+    "entryGap": "10px"
+  },
+  "borderRadius": "4px"
+}

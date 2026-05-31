@@ -286,7 +286,14 @@ export async function sendPrompt(
       ),
     ])
 
-    if (result.error) throw new Error(JSON.stringify(result.error))
+    if (result.error) {
+      const errorMsg = JSON.stringify(result.error)
+      const isQuotaError = QUOTA_ERROR_PATTERNS.some(pattern => pattern.test(errorMsg))
+      if (isQuotaError) {
+        throw new Error("TOKEN_QUOTA_EXCEEDED: token 配额不足，请充值后重试")
+      }
+      throw new Error(errorMsg)
+    }
 
     const parts = result.data?.parts || []
     const content = parts
@@ -312,6 +319,19 @@ export function setModel(model: string) {
 export function getCurrentModel() {
   return currentModel
 }
+
+const QUOTA_ERROR_PATTERNS = [
+  /insufficient balance/i,
+  /insufficient credit/i,
+  /quota exceeded/i,
+  /quota limit/i,
+  /payment required/i,
+  /out of tokens/i,
+  /balance not enough/i,
+  /credit.*not.*available/i,
+  /subscription.*expired/i,
+  /expired account/i
+]
 
 export async function getModels(): Promise<string[]> {
   try {

@@ -4,7 +4,7 @@ import fs from "fs"
 
 function getBaseDir(): string {
   if (app.isPackaged) {
-    return path.join(app.getPath("userData"), "resume-ai")
+    return app.getPath("userData")
   }
   return path.join(__dirname, "..")
 }
@@ -29,8 +29,8 @@ export function generateResumeFileName(userName: string, templateLabel: string):
   return `${userName}_${templateLabel}_${date}.pdf`
 }
 
-export function getVisualTemplatesDir(): string {
-  return ensureDir(path.join(getBaseDir(), "visual-templates"))
+export function getVisualThemesDir(): string {
+  return ensureDir(path.join(getBaseDir(), "themes"))
 }
 
 export function resolveTemplatesDir(): string {

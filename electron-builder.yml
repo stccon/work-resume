@@ -21,6 +21,7 @@ files:
   - dist
   - dist-electron
   - templates
+  - themes
   - package.json
 
 extraResources:

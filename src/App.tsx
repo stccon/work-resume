@@ -12,7 +12,7 @@ import type { TemplateDefinition } from "@/types/template"
 import type { ResumeData } from "@/types/resume"
 import type { VisualTheme } from "@/types/visual-template"
 import { VisualThemePicker } from "@/components/VisualThemePicker"
-import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../visual-templates/index"
+import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../themes/index"
 
 import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
@@ -252,17 +252,44 @@ function App() {
     })
 
     try {
+      let response: { content: string; error: any; isQuotaError: boolean }
       if (isFirstMessage) {
-        await window.electronAPI.sendFirstMessage(text)
+        response = await window.electronAPI.sendFirstMessage(text)
       } else {
-        await window.electronAPI.sendMessage(text)
+        response = await window.electronAPI.sendMessage(text)
       }
-    } catch (err) {
+
+      if (response.isQuotaError) {
+        toast("error", "Token 配额不足，请充值后重试", {
+          duration: 5000,
+          action: {
+            label: "去充值",
+            onClick: () => {
+              window.open("https://opencode.ai", "_blank")
+            }
+          }
+        })
+        setStreamingContent("")
+        setLoading(false)
+      }
+    } catch (err: any) {
       window.electronAPI.removeChatListeners()
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `抱歉，出错了：${err}` },
-      ])
+      if (err?.message?.includes('TOKEN_QUOTA_EXCEEDED')) {
+        toast("error", "Token 配额不足，请充值后重试", {
+          duration: 5000,
+          action: {
+            label: "去充值",
+            onClick: () => {
+              window.open("https://opencode.ai", "_blank")
+            }
+          }
+        })
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: `抱歉，出错了：${err}` },
+        ])
+      }
       setStreamingContent("")
       setLoading(false)
     }

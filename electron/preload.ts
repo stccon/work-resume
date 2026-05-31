@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 contextBridge.exposeInMainWorld("electronAPI", {
-  sendMessage: (text: string) => ipcRenderer.invoke("chat:send", text) as Promise<{ content: string }>,
-  sendFirstMessage: (prompt: string) => ipcRenderer.invoke("chat:send-first-message", prompt) as Promise<{ content: string }>,
+  sendMessage: (text: string) => ipcRenderer.invoke("chat:send", text) as Promise<{ content: string; error: any; isQuotaError: boolean }>,
+  sendFirstMessage: (prompt: string) => ipcRenderer.invoke("chat:send-first-message", prompt) as Promise<{ content: string; error: any; isQuotaError: boolean }>,
   getModels: () => ipcRenderer.invoke("models:list"),
   setModel: (model: string) => ipcRenderer.invoke("models:set", model),
   getCurrentModel: () => ipcRenderer.invoke("models:current"),

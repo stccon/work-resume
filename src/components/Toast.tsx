@@ -8,12 +8,17 @@ interface ToastData {
   id: string
   type: ToastType
   message: string
+  duration?: number
+  action?: {
+    label: string
+    onClick: () => void
+  }
 }
 
 let addToastFn: ((toast: Omit<ToastData, "id">) => void) | null = null
 
-export function toast(type: ToastType, message: string) {
-  addToastFn?.({ type, message })
+export function toast(type: ToastType, message: string, options?: { duration?: number; action?: { label: string; onClick: () => void } }) {
+  addToastFn?.({ type, message, ...options })
 }
 
 export function ToastContainer() {

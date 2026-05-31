@@ -2,7 +2,7 @@ import { app, BrowserWindow } from "electron"
 import path from "path"
 import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
-import { getTemplatesDir, getResumesDir, getVisualTemplatesDir } from "./paths"
+import { getTemplatesDir, getResumesDir, getVisualThemesDir } from "./paths"
 
 let mainWindow: BrowserWindow | null = null
 
@@ -21,13 +21,13 @@ function copyJsonDir(srcDir: string, targetDir: string) {
 function ensureDirectories() {
   getTemplatesDir()
   getResumesDir()
-  getVisualTemplatesDir()
+  getVisualThemesDir()
 
   const devTemplates = path.join(__dirname, "..", "templates")
   copyJsonDir(devTemplates, getTemplatesDir())
 
-  const devVisualTemplates = path.join(__dirname, "..", "visual-templates", "themes")
-  copyJsonDir(devVisualTemplates, getVisualTemplatesDir())
+  const devVisualTemplates = path.join(__dirname, "..", "themes")
+  copyJsonDir(devVisualTemplates, getVisualThemesDir())
 }
 
 function createWindow() {

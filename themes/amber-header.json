@@ -1,0 +1,37 @@
+{
+  "name": "amber-header",
+  "label": "琥珀顶栏",
+  "description": "顶部琥珀色横幅突出姓名与联系方式，卡片式分区，适合创意和营销岗位",
+  "layout": "single-column",
+  "headerStyle": "colored-bar",
+  "decorationStyle": "dot",
+  "colors": {
+    "primary": "#d97706",
+    "primaryLight": "#fffbeb",
+    "text": "#1c1917",
+    "textMuted": "#78716c",
+    "background": "#fafaf9",
+    "border": "#e7e5e4",
+    "headerBg": "#b45309",
+    "headerText": "#ffffff",
+    "sectionBg": "#fff7ed"
+  },
+  "fonts": {
+    "heading": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "26px",
+    "titleFontSize": "14px",
+    "sectionTitleFontSize": "13px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.6"
+  },
+  "sectionStyle": "card",
+  "spacing": {
+    "pagePadding": "36px",
+    "sectionGap": "16px",
+    "entryGap": "10px"
+  },
+  "borderRadius": "8px"
+}

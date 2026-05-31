@@ -1,12 +1,18 @@
 export type LayoutStyle = "single-column" | "two-column"
 
-export type SectionStyle = "underlined" | "colored-bg" | "minimal"
+export type SectionStyle = "underlined" | "colored-bg" | "minimal" | "card"
+
+export type HeaderStyle = "centered" | "left" | "colored-bar"
+
+export type DecorationStyle = "line" | "dot" | "none"
 
 export interface VisualTheme {
   name: string
   label: string
   description: string
   layout: LayoutStyle
+  headerStyle: HeaderStyle
+  decorationStyle: DecorationStyle
   colors: {
     primary: string
     primaryLight: string
@@ -16,13 +22,19 @@ export interface VisualTheme {
     border: string
     sidebarBg?: string
     sidebarText?: string
+    headerBg?: string
+    headerText?: string
+    sectionBg?: string
+  }
+  fonts: {
+    heading: string
+    body: string
   }
   typography: {
     nameFontSize: string
     titleFontSize: string
     sectionTitleFontSize: string
     bodyFontSize: string
-    fontFamily: string
     lineHeight: string
   }
   sectionStyle: SectionStyle
@@ -31,4 +43,6 @@ export interface VisualTheme {
     sectionGap: string
     entryGap: string
   }
+  sidebarWidth?: string
+  borderRadius: string
 }

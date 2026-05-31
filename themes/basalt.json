@@ -1,0 +1,37 @@
+{
+  "name": "basalt",
+  "label": "玄武岩",
+  "description": "紧凑双栏布局，窄侧边栏高效利用空间，适合多年工作经验展示",
+  "layout": "two-column",
+  "headerStyle": "left",
+  "decorationStyle": "line",
+  "colors": {
+    "primary": "#1e293b",
+    "primaryLight": "#f1f5f9",
+    "text": "#0f172a",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#cbd5e1",
+    "sidebarBg": "#1e293b",
+    "sidebarText": "#f1f5f9"
+  },
+  "fonts": {
+    "heading": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "20px",
+    "titleFontSize": "11px",
+    "sectionTitleFontSize": "11px",
+    "bodyFontSize": "10px",
+    "lineHeight": "1.45"
+  },
+  "sectionStyle": "underlined",
+  "spacing": {
+    "pagePadding": "24px",
+    "sectionGap": "12px",
+    "entryGap": "7px"
+  },
+  "sidebarWidth": "28%",
+  "borderRadius": "4px"
+}

@@ -1,0 +1,35 @@
+{
+  "name": "graphite",
+  "label": "石墨灰",
+  "description": "极简专业风格，灰阶配色，左对齐头部，适合技术研发和工程岗位",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#334155",
+    "primaryLight": "#f1f5f9",
+    "text": "#0f172a",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#e2e8f0",
+    "sectionBg": "#f8fafc"
+  },
+  "fonts": {
+    "heading": "'Noto Serif SC', Georgia, 'Times New Roman', serif",
+    "body": "-apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif"
+  },
+  "typography": {
+    "nameFontSize": "24px",
+    "titleFontSize": "13px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "10.5px",
+    "lineHeight": "1.5"
+  },
+  "sectionStyle": "colored-bg",
+  "spacing": {
+    "pagePadding": "36px",
+    "sectionGap": "16px",
+    "entryGap": "8px"
+  },
+  "borderRadius": "2px"
+}
