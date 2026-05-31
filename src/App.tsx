@@ -14,6 +14,12 @@ import type { ResumeData } from "@/types/resume"
 import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 
+const log = (tag: string, ...args: any[]) => {
+  const msg = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
+  console.log(`[${tag}]`, ...args)
+  window.electronAPI?.log?.(tag, msg).catch(() => {})
+}
+
 function App() {
   const [theme, setTheme] = useState<"light" | "dark">("light")
   const [messages, setMessages] = useState<ChatMessageType[]>([])
@@ -25,12 +31,12 @@ function App() {
   const [templateData, setTemplateData] = useState<TemplateDefinition | null>(null)
   const [streamingContent, setStreamingContent] = useState("")
   const [streamingThinking, setStreamingThinking] = useState("")
+  const [opencodeConnected, setOpencodeConnected] = useState(true)
   const [resumeData, setResumeData] = useState<ResumeData | null>(null)
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const charBufferRef = useRef("")
-  const thinkBufferRef = useRef("")
+
   const resumeDataRef = useRef(resumeData)
   resumeDataRef.current = resumeData
   const activeResumeIdRef = useRef(activeResumeId)
@@ -56,6 +62,9 @@ function App() {
       setSavedResumes(list)
       setModels(modelsList)
       setCurrentModel(current)
+
+      const status = await window.electronAPI.opencodeStatus().catch(() => ({ connected: false }))
+      setOpencodeConnected(status.connected)
 
       if (list.length > 0) {
         await selectResume(list[0].id, list)
@@ -128,6 +137,34 @@ function App() {
     localStorage.setItem("welcome-done", "1")
   }
 
+  function flattenSectionValues(data: ResumeData) {
+    for (const sectionId of Object.keys(data.sections)) {
+      const section = data.sections[sectionId]
+      const keys = Object.keys(section)
+      let hasObject = false
+      for (const k of keys) {
+        if (typeof section[k] === "object" && section[k] !== null) {
+          hasObject = true
+          break
+        }
+      }
+      if (!hasObject) continue
+
+      const flattened: Record<string, string> = {}
+      for (const [entryKey, entryVal] of Object.entries(section)) {
+        if (typeof entryVal === "object" && entryVal !== null) {
+          const idx = isNaN(Number(entryKey)) ? entryKey : `entry${entryKey}`
+          for (const [fieldKey, fieldVal] of Object.entries(entryVal as Record<string, any>)) {
+            flattened[`${idx}_${fieldKey}`] = typeof fieldVal === "string" ? fieldVal : JSON.stringify(fieldVal)
+          }
+        } else if (typeof entryVal === "string") {
+          flattened[entryKey] = entryVal
+        }
+      }
+      data.sections[sectionId] = flattened
+    }
+  }
+
   const tryDetectResumeJSON = useCallback((reply: string) => {
     const jsonBlock = reply.match(/```json\n?([\s\S]*?)\n?```/)
     if (!jsonBlock) return null
@@ -137,6 +174,7 @@ function App() {
         if (parsed.template === "technical" || parsed.template === "management") {
           parsed.template = "general"
         }
+        flattenSectionValues(parsed)
         return parsed as ResumeData
       }
     } catch { /* ignore */ }
@@ -195,27 +233,14 @@ function App() {
     setStreamingContent("")
     setStreamingThinking("")
 
-    charBufferRef.current = ""
-    thinkBufferRef.current = ""
-
     window.electronAPI.removeChatListeners()
 
-    const stripped = isFirstMessage
-      ? (s: string) => s
-      : (s: string) => s.startsWith(text) ? s.slice(text.length) : s
-
     window.electronAPI.onChatChunk((chunk) => {
-      if (chunk.type === "text") {
-        charBufferRef.current += chunk.text
-        setStreamingContent(stripped(charBufferRef.current))
-      } else if (chunk.type === "thinking") {
-        thinkBufferRef.current += chunk.text
-        setStreamingThinking(thinkBufferRef.current)
-      } else if (chunk.type === "done") {
+      if (chunk.type === "done") {
         window.electronAPI.removeChatListeners()
-        const raw = chunk.content || charBufferRef.current || "(无回复)"
-        const content = stripped(raw)
-        const thinking = chunk.thinking || thinkBufferRef.current || ""
+        const content = chunk.content || "(无回复)"
+        const thinking = chunk.thinking || ""
+        log("renderer", "done — content (first 500):", content.slice(0, 500))
         handleAfterDone(content, thinking)
       }
     })
@@ -331,6 +356,16 @@ function App() {
     toast("info", "已选择文件")
   }
 
+  const handleRetryOpencode = async () => {
+    const { connected } = await window.electronAPI.opencodeRetry()
+    setOpencodeConnected(connected)
+    if (connected) {
+      toast("success", "Opencode 已连接")
+    } else {
+      toast("error", "Opencode 连接失败，请检查是否已安装 Opencode")
+    }
+  }
+
   const hasResumes = savedResumes.length > 0
   const activeResume = hasResumes && activeResumeId
     ? savedResumes.find((r) => r.id === activeResumeId)
@@ -351,6 +386,15 @@ function App() {
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">AI 简历助手</h1>
+            {!opencodeConnected && (
+              <button
+                onClick={handleRetryOpencode}
+                className="text-xs px-2 py-0.5 rounded-full bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                title="Opencode 未连接，点击重试"
+              >
+                Opencode 未连接 · 重试
+              </button>
+            )}
             {activeResume && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-muted-foreground">
                 {activeResume.title}

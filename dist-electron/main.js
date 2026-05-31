@@ -25,6 +25,16 @@ const electron = require("electron");
 const path = require("path");
 const fs = require("fs");
 const child_process = require("child_process");
+const logDir = path.join(__dirname, "..", "logs");
+const logFile = path.join(logDir, `debug-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.log`);
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
+function log(tag, ...args) {
+  const time = (/* @__PURE__ */ new Date()).toISOString().slice(11, 23);
+  const line = `[${time}] [${tag}] ${args.map((a) => typeof a === "string" ? a : JSON.stringify(a)).join(" ")}`;
+  fs.appendFileSync(logFile, line + "\n");
+}
 let serverProcess = null;
 let serverUrl = null;
 let client = null;
@@ -43,61 +53,91 @@ function getBinaryPath() {
   if (fs.existsSync(cwdPath)) return cwdPath;
   return binaryName;
 }
-function isMockMode() {
-  return false;
+function isConnected() {
+  return serverUrl !== null;
 }
-async function startOpencode() {
-  if (serverProcess) return;
+const LISTEN_RE = /opencode server listening on\s+(https?:\/\/[^\s]+)/;
+function spawnServer() {
   const cmd = getBinaryPath();
+  log("server", "spawning:", cmd, "serve");
   serverProcess = child_process.spawn(cmd, ["serve"], {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "pipe"],
     shell: true,
     env: process.env
   });
+  const proc = serverProcess;
   return new Promise((resolve, reject) => {
     var _a, _b;
-    let found = false;
     let output = "";
+    let resolved = false;
     const timeout = setTimeout(() => {
-      if (!found) {
-        serverProcess == null ? void 0 : serverProcess.kill();
-        serverProcess = null;
-        reject(new Error(`opencode serve 启动超时（20秒）
+      if (!resolved) {
+        proc.kill();
+        reject(new Error(`启动超时（20秒）
 ${output.slice(-500)}`));
       }
     }, 2e4);
     function onData(data) {
-      const text = data.toString();
-      output += text;
-      const m = text.match(/opencode server listening on\s+(https?:\/\/[^\s]+)/);
-      if (m && !found) {
-        found = true;
-        serverUrl = m[1].replace(/\/+$/, "");
+      output += data.toString();
+      const m = LISTEN_RE.exec(output);
+      if (m && !resolved) {
+        resolved = true;
         clearTimeout(timeout);
-        console.log("Opencode server ready at", serverUrl);
-        resolve();
+        resolve(m[1].replace(/\/+$/, ""));
       }
     }
-    (_a = serverProcess.stdout) == null ? void 0 : _a.on("data", onData);
-    (_b = serverProcess.stderr) == null ? void 0 : _b.on("data", onData);
-    serverProcess.on("error", (err) => {
-      if (!found) {
+    (_a = proc.stdout) == null ? void 0 : _a.on("data", onData);
+    (_b = proc.stderr) == null ? void 0 : _b.on("data", onData);
+    proc.on("error", (err) => {
+      if (!resolved) {
         clearTimeout(timeout);
-        serverProcess = null;
         reject(err);
       }
     });
-    serverProcess.on("exit", (code) => {
-      if (!found) {
+    proc.on("exit", (code) => {
+      if (!resolved) {
         clearTimeout(timeout);
-        serverProcess = null;
-        reject(new Error(`opencode serve 已退出 (code ${code})
+        reject(new Error(`进程已退出 (code ${code})
 ${output.slice(-500)}`));
       }
     });
   });
 }
+async function startOpencode() {
+  if (serverProcess) return;
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const url = await spawnServer();
+      serverUrl = url;
+      log("server", "opencode server ready at", serverUrl);
+      return;
+    } catch (err) {
+      log("server", `attempt ${attempt}/${maxAttempts} failed:`, err.message || err);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2e3));
+      } else {
+        serverUrl = null;
+        serverProcess = null;
+        throw err;
+      }
+    }
+  }
+}
+async function retryOpencode() {
+  serverUrl = null;
+  serverProcess = null;
+  client = null;
+  sessionId = null;
+  try {
+    await startOpencode();
+    return true;
+  } catch {
+    return false;
+  }
+}
+let sessionLock = null;
 async function getClient() {
   if (client) return client;
   if (!serverUrl) throw new Error("Opencode 未连接");
@@ -106,18 +146,25 @@ async function getClient() {
   return client;
 }
 async function ensureSession() {
-  var _a;
   if (sessionId) return sessionId;
-  const c = await getClient();
-  const session = await Promise.race([
-    c.session.create(),
-    new Promise(
-      (_, reject) => setTimeout(() => reject(new Error("会话创建超时")), 15e3)
-    )
-  ]);
-  if (session.error) throw new Error(JSON.stringify(session.error));
-  sessionId = (_a = session.data) == null ? void 0 : _a.id;
-  if (!sessionId) throw new Error("会话 ID 为空");
+  if (sessionLock) {
+    await sessionLock;
+    if (sessionId) return sessionId;
+  }
+  sessionLock = (async () => {
+    var _a;
+    const c = await getClient();
+    const session = await Promise.race([
+      c.session.create(),
+      new Promise(
+        (_, reject) => setTimeout(() => reject(new Error("会话创建超时")), 15e3)
+      )
+    ]);
+    if (session.error) throw new Error(JSON.stringify(session.error));
+    sessionId = (_a = session.data) == null ? void 0 : _a.id;
+    if (!sessionId) throw new Error("会话 ID 为空");
+  })();
+  await sessionLock;
   return sessionId;
 }
 async function streamFromGlobalEvents(sid, win, signal) {
@@ -165,10 +212,11 @@ async function streamFromGlobalEvents(sid, win, signal) {
             }
             const isText = pType.includes("text") || pType === "message.part.delta" && props.field === "text" && currentPartType !== "reasoning";
             const isReason = pType.includes("reason") || pType === "message.part.delta" && (props.field === "reasoning" || props.field === "text" && currentPartType === "reasoning");
+            log("sse", `event pType=${pType} field=${props.field || "?"} partType=${currentPartType} textLen=${text.length} isText=${isText} isReason=${isReason}`);
             if (isText) {
-              win.webContents.send("chat:chunk", { type: "text", text });
+              log("sse-text", text.slice(0, 300));
             } else if (isReason) {
-              win.webContents.send("chat:chunk", { type: "thinking", text });
+              log("sse-think", text.slice(0, 300));
             }
           } catch {
           }
@@ -198,6 +246,7 @@ async function sendPrompt(text, win, asFirstMessage = false) {
   const fullText = conversationContext ? `${conversationContext}
 
 ${prefix}${text}` : text;
+  log("prompt", `fullText len=${fullText.length} text=${text.slice(0, 100)}`);
   try {
     const result = await Promise.race([
       c.session.prompt({
@@ -215,6 +264,7 @@ ${prefix}${text}` : text;
     const parts = ((_a = result.data) == null ? void 0 : _a.parts) || [];
     const content = parts.filter((p) => p.type === "text").map((p) => p.text).join("");
     const thinking = parts.filter((p) => p.type === "reasoning").map((p) => p.text).join("\n");
+    log("prompt-result", `parts=${parts.length} contentLen=${content.length} content=${content.slice(0, 500)} thinking=${thinking.slice(0, 300)}`);
     if (win) {
       win.webContents.send("chat:chunk", { type: "done", content, thinking });
     }
@@ -365,6 +415,13 @@ function setupIPC() {
   electron.ipcMain.handle("models:current", async () => {
     return getCurrentModel();
   });
+  electron.ipcMain.handle("opencode:status", async () => {
+    return { connected: isConnected() };
+  });
+  electron.ipcMain.handle("opencode:retry", async () => {
+    const ok = await retryOpencode();
+    return { connected: ok };
+  });
   electron.ipcMain.handle("apikey:set", async (_event, provider, key) => {
     store.set(`apikey-${provider}`, key);
   });
@@ -513,12 +570,16 @@ function setupIPC() {
       return { error: err.message || String(err) };
     }
   });
+  electron.ipcMain.handle("log:write", async (_event, tag, message) => {
+    log(tag, message);
+  });
 }
 async function initOpencode() {
   try {
     await startOpencode();
-    if (isMockMode()) ;
-    else {
+    if (isMockMode()) {
+      console.log("Running in mock mode (opencode SDK not available)");
+    } else {
       const savedModel = store.get("currentModel");
       if (savedModel) {
         setModel(savedModel);

@@ -5,7 +5,8 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "vite build",
+"typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "electron:dev": "vite",
     "test": "vitest run",

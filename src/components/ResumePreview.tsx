@@ -41,9 +41,11 @@ function getFieldLabel(sectionId: string, fieldId: string, template: TemplateDef
   return fieldId
 }
 
-function formatValue(value: string): string {
-  if (!value) return ""
-  return value
+function formatValue(value: any): string {
+  if (value == null) return ""
+  if (typeof value === "string") return value
+  if (typeof value === "object") return JSON.stringify(value)
+  return String(value)
 }
 
 function isMultiEntry(fields: Record<string, string>): boolean {
@@ -175,7 +177,7 @@ export function ResumePreview({ data, template }: ResumePreviewProps) {
                             .map(([k, v]) => (
                               <div key={k} className="text-xs text-muted-foreground">
                                 <span>{getFieldLabel(section.id, k, template)}：</span>
-                                <span>{v}</span>
+                                <span>{formatValue(v)}</span>
                               </div>
                             ))}
                         </div>

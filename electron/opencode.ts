@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from "child_process"
 import { app, BrowserWindow } from "electron"
 import fs from "fs"
 import path from "path"
+import { log } from "./logger"
 
 let serverProcess: ChildProcess | null = null
 let serverUrl: string | null = null
@@ -27,14 +28,19 @@ function getBinaryPath(): string {
   return binaryName
 }
 
-export function isMockMode() {
-  return false
+export function getServerUrl(): string | null {
+  return serverUrl
 }
 
-export async function startOpencode(): Promise<void> {
-  if (serverProcess) return
+export function isConnected(): boolean {
+  return serverUrl !== null
+}
 
+const LISTEN_RE = /opencode server listening on\s+(https?:\/\/[^\s]+)/
+
+function spawnServer(): Promise<string> {
   const cmd = getBinaryPath()
+  log("server", "spawning:", cmd, "serve")
 
   serverProcess = spawn(cmd, ["serve"], {
     cwd: process.cwd(),
@@ -42,52 +48,85 @@ export async function startOpencode(): Promise<void> {
     shell: true,
     env: process.env,
   })
+  const proc = serverProcess
 
   return new Promise((resolve, reject) => {
-    let found = false
     let output = ""
+    let resolved = false
 
     const timeout = setTimeout(() => {
-      if (!found) {
-        serverProcess?.kill()
-        serverProcess = null
-        reject(new Error(`opencode serve 启动超时（20秒）\n${output.slice(-500)}`))
+      if (!resolved) {
+        proc.kill()
+        reject(new Error(`启动超时（20秒）\n${output.slice(-500)}`))
       }
     }, 20000)
 
     function onData(data: Buffer) {
-      const text = data.toString()
-      output += text
-      const m = text.match(/opencode server listening on\s+(https?:\/\/[^\s]+)/)
-      if (m && !found) {
-        found = true
-        serverUrl = m[1].replace(/\/+$/, "")
+      output += data.toString()
+      const m = LISTEN_RE.exec(output)
+      if (m && !resolved) {
+        resolved = true
         clearTimeout(timeout)
-        console.log("Opencode server ready at", serverUrl)
-        resolve()
+        resolve(m[1].replace(/\/+$/, ""))
       }
     }
 
-    serverProcess.stdout?.on("data", onData)
-    serverProcess.stderr?.on("data", onData)
+    proc.stdout?.on("data", onData)
+    proc.stderr?.on("data", onData)
 
-    serverProcess.on("error", (err) => {
-      if (!found) {
+    proc.on("error", (err) => {
+      if (!resolved) {
         clearTimeout(timeout)
-        serverProcess = null
         reject(err)
       }
     })
 
-    serverProcess.on("exit", (code) => {
-      if (!found) {
+    proc.on("exit", (code) => {
+      if (!resolved) {
         clearTimeout(timeout)
-        serverProcess = null
-        reject(new Error(`opencode serve 已退出 (code ${code})\n${output.slice(-500)}`))
+        reject(new Error(`进程已退出 (code ${code})\n${output.slice(-500)}`))
       }
     })
   })
 }
+
+export async function startOpencode(): Promise<void> {
+  if (serverProcess) return
+
+  const maxAttempts = 2
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const url = await spawnServer()
+      serverUrl = url
+      log("server", "opencode server ready at", serverUrl)
+      return
+    } catch (err: any) {
+      log("server", `attempt ${attempt}/${maxAttempts} failed:`, err.message || err)
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 2000))
+      } else {
+        serverUrl = null
+        serverProcess = null
+        throw err
+      }
+    }
+  }
+}
+
+export async function retryOpencode(): Promise<boolean> {
+  serverUrl = null
+  serverProcess = null
+  client = null
+  sessionId = null
+  try {
+    await startOpencode()
+    return true
+  } catch {
+    return false
+  }
+}
+
+let sessionLock: Promise<void> | null = null
 
 async function getClient() {
   if (client) return client
@@ -99,17 +138,27 @@ async function getClient() {
 
 async function ensureSession(): Promise<string> {
   if (sessionId) return sessionId
-  const c = await getClient()
-  const session = await Promise.race([
-    c.session.create(),
-    new Promise<any>((_, reject) =>
-      setTimeout(() => reject(new Error("会话创建超时")), 15000)
-    ),
-  ])
-  if (session.error) throw new Error(JSON.stringify(session.error))
-  sessionId = session.data?.id
-  if (!sessionId) throw new Error("会话 ID 为空")
-  return sessionId
+
+  if (sessionLock) {
+    await sessionLock
+    if (sessionId) return sessionId
+  }
+
+  sessionLock = (async () => {
+    const c = await getClient()
+    const session = await Promise.race([
+      c.session.create(),
+      new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error("会话创建超时")), 15000)
+      ),
+    ])
+    if (session.error) throw new Error(JSON.stringify(session.error))
+    sessionId = session.data?.id
+    if (!sessionId) throw new Error("会话 ID 为空")
+  })()
+
+  await sessionLock
+  return sessionId!
 }
 
 async function streamFromGlobalEvents(
@@ -164,10 +213,12 @@ async function streamFromGlobalEvents(
             const isReason = pType.includes("reason") ||
               (pType === "message.part.delta" && (props.field === "reasoning" || (props.field === "text" && currentPartType === "reasoning")))
 
+            log("sse", `event pType=${pType} field=${props.field || "?"} partType=${currentPartType} textLen=${text.length} isText=${isText} isReason=${isReason}`)
+
             if (isText) {
-              win.webContents.send("chat:chunk", { type: "text", text })
+              log("sse-text", text.slice(0, 300))
             } else if (isReason) {
-              win.webContents.send("chat:chunk", { type: "thinking", text })
+              log("sse-think", text.slice(0, 300))
             }
           } catch { /* json parse */ }
           eventType = ""
@@ -208,6 +259,7 @@ export async function sendPrompt(
     ? `${conversationContext}\n\n${prefix}${text}`
     : text
 
+  log("prompt", `fullText len=${fullText.length} text=${text.slice(0, 100)}`)
   try {
     const result = await Promise.race([
       c.session.prompt({
@@ -233,6 +285,8 @@ export async function sendPrompt(
       .filter((p: any) => p.type === "reasoning")
       .map((p: any) => p.text)
       .join("\n")
+
+    log("prompt-result", `parts=${parts.length} contentLen=${content.length} content=${content.slice(0, 500)} thinking=${thinking.slice(0, 300)}`)
 
     if (win) {
       win.webContents.send("chat:chunk", { type: "done", content, thinking })

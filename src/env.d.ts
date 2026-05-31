@@ -6,8 +6,7 @@ interface SendMessageResult {
 }
 
 interface ChatChunk {
-  type: "text" | "thinking" | "done"
-  text?: string
+  type: "done"
   content?: string
   thinking?: string
 }
@@ -52,6 +51,9 @@ interface ElectronAPI {
   setChatContext: (context: string) => Promise<void>
   clearChatContext: () => Promise<void>
   extractPdfStyle: (filePath: string) => Promise<any>
+  opencodeStatus: () => Promise<{ connected: boolean }>
+  opencodeRetry: () => Promise<{ connected: boolean }>
+  log: (tag: string, message: string) => Promise<void>
 }
 
 interface File {

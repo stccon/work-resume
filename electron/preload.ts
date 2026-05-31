@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateResume: (id: string, data: any, template?: any) => ipcRenderer.invoke("resume:update", id, data, template),
   exportPDF: (data: any, template: any) => ipcRenderer.invoke("resume:export-pdf", data, template),
   savePdfBuffer: (buffer: ArrayBuffer) => ipcRenderer.invoke("resume:save-pdf-buffer", buffer),
+  opencodeStatus: () => ipcRenderer.invoke("opencode:status") as Promise<{ connected: boolean }>,
+  opencodeRetry: () => ipcRenderer.invoke("opencode:retry") as Promise<{ connected: boolean }>,
   onChatChunk: (callback: (chunk: { type: "text" | "thinking" | "done"; text?: string; content?: string; thinking?: string }) => void) => {
     ipcRenderer.on("chat:chunk", (_event, chunk) => callback(chunk))
   },
@@ -27,4 +29,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setChatContext: (context: string) => ipcRenderer.invoke("chat:set-context", context),
   clearChatContext: () => ipcRenderer.invoke("chat:clear-context"),
   extractPdfStyle: (filePath: string) => ipcRenderer.invoke("pdf:extract-style", filePath),
+  log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),
 })

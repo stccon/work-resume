@@ -1,7 +1,8 @@
 import { ipcMain, BrowserWindow, dialog } from "electron"
-import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isMockMode, setConversationContext, clearConversationContext } from "./opencode"
+import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext } from "./opencode"
 import path from "path"
 import fs from "fs"
+import { log } from "./logger"
 import {
   getTemplatesDir,
   getResumesDir,
@@ -149,6 +150,15 @@ export function setupIPC() {
 
   ipcMain.handle("models:current", async () => {
     return getCurrentModel()
+  })
+
+  ipcMain.handle("opencode:status", async () => {
+    return { connected: isConnected() }
+  })
+
+  ipcMain.handle("opencode:retry", async () => {
+    const ok = await retryOpencode()
+    return { connected: ok }
   })
 
   ipcMain.handle("apikey:set", async (_event, provider: string, key: string) => {
@@ -322,6 +332,10 @@ export function setupIPC() {
       console.error("PDF extraction error:", err)
       return { error: err.message || String(err) }
     }
+  })
+
+  ipcMain.handle("log:write", async (_event, tag: string, message: string) => {
+    log(tag, message)
   })
 }
 
