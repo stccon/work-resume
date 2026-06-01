@@ -1,0 +1,59 @@
+{
+  "name": "v2-tech-blueprint",
+  "label": "技术蓝图 Blueprint",
+  "description": "深靛蓝+青强调+split 头部+箭头 bullet，Habaneraa/Linear changelog 技术风，适合 AI 工程师/PM/创业公司",
+  "series": "v2",
+  "family": "modern",
+  "language": "auto",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#0a1628",
+    "primaryLight": "#e0e7ff",
+    "text": "#0a1628",
+    "textMuted": "#475569",
+    "background": "#ffffff",
+    "border": "#cbd5e1",
+    "divider": "#0a1628",
+    "accent": "#06b6d4"
+  },
+  "fonts": {
+    "heading": "'Inter', -apple-system, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "'Inter', -apple-system, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "28px",
+    "titleFontSize": "13px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.55",
+    "nameLetterSpacing": "-0.015em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.1em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "48px",
+    "sectionGap": "22px",
+    "entryGap": "12px"
+  },
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "split",
+    "sectionTitleRule": "short-line",
+    "contactSeparator": "  /  ",
+    "showHeaderDivider": false,
+    "nameStyle": "default",
+    "bulletStyle": "arrow",
+    "tagStyle": "pill",
+    "avatar": {
+      "defaultEnabled": false,
+      "placement": "top-left",
+      "size": "small",
+      "shape": "circle",
+      "border": "thin"
+    }
+  }
+}

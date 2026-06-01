@@ -31,5 +31,12 @@
     "sectionGap": "16px",
     "entryGap": "8px"
   },
-  "borderRadius": "2px"
+  "borderRadius": "2px",
+  "avatar": {
+    "defaultEnabled": false,
+    "placement": "top-left",
+    "size": "small",
+    "shape": "square",
+    "border": "thin"
+  }
 }

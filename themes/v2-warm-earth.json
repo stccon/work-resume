@@ -1,0 +1,60 @@
+{
+  "name": "v2-warm-earth",
+  "label": "暖色人文 Earth",
+  "description": "奶白+暖棕+罗马数字章节+全宽线，Kinfolk/Monocle 杂志人文风，适合人文/教育/NGO/出版/自由职业",
+  "series": "v2",
+  "family": "editorial",
+  "language": "auto",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#a85432",
+    "primaryLight": "#f7f0e8",
+    "text": "#2a2520",
+    "textMuted": "#786a5e",
+    "background": "#faf6f0",
+    "border": "#e3d9c8",
+    "divider": "#2a2520",
+    "accent": "#a85432",
+    "sectionBg": "#f1e9dc"
+  },
+  "fonts": {
+    "heading": "'Playfair Display', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, serif",
+    "body": "'Inter', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "38px",
+    "titleFontSize": "14px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "11.5px",
+    "lineHeight": "1.75",
+    "nameLetterSpacing": "-0.025em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.2em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "64px",
+    "sectionGap": "32px",
+    "entryGap": "18px"
+  },
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "magazine",
+    "sectionTitleRule": "full-line",
+    "contactSeparator": "  ·  ",
+    "showHeaderDivider": false,
+    "nameStyle": "serif-large",
+    "bulletStyle": "dot",
+    "tagStyle": "underline",
+    "avatar": {
+      "defaultEnabled": true,
+      "placement": "top-right",
+      "size": "medium",
+      "shape": "rounded",
+      "border": "thin"
+    }
+  }
+}

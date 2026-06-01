@@ -1,0 +1,62 @@
+{
+  "name": "v2-executive-sidebar",
+  "label": "高管双栏 Executive",
+  "description": "深色 sidebar+主区 short-line 装饰，Resume.io Executive/Meridian 高管风，适合总监级以上/跨国企业",
+  "series": "v2",
+  "family": "modern",
+  "language": "auto",
+  "layout": "two-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#1a1a1a",
+    "primaryLight": "#f3f4f6",
+    "text": "#1f2937",
+    "textMuted": "#6b7280",
+    "background": "#ffffff",
+    "border": "#e5e7eb",
+    "sidebarBg": "#0f1d2e",
+    "sidebarText": "#f3f4f6",
+    "divider": "#0f1d2e",
+    "accent": "#c9a86a"
+  },
+  "fonts": {
+    "heading": "'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "26px",
+    "titleFontSize": "12px",
+    "sectionTitleFontSize": "12px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.55",
+    "nameLetterSpacing": "-0.01em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.16em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "32px",
+    "sectionGap": "22px",
+    "entryGap": "14px"
+  },
+  "sidebarWidth": "34%",
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "minimal",
+    "sectionTitleRule": "short-line",
+    "contactSeparator": "  ·  ",
+    "showHeaderDivider": false,
+    "nameStyle": "default",
+    "bulletStyle": "dash",
+    "tagStyle": "flat",
+    "avatar": {
+      "defaultEnabled": true,
+      "placement": "sidebar-top",
+      "size": "large",
+      "shape": "circle",
+      "border": "colored"
+    }
+  }
+}

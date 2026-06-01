@@ -3,7 +3,7 @@
   "label": "冰川",
   "description": "清新自然风格，浅蓝主调，圆角卡片分区，适合设计师和产品经理",
   "layout": "single-column",
-  "headerStyle": "centered",
+  "headerStyle": "left",
   "decorationStyle": "dot",
   "colors": {
     "primary": "#0ea5e9",
@@ -31,5 +31,12 @@
     "sectionGap": "16px",
     "entryGap": "9px"
   },
-  "borderRadius": "10px"
+  "borderRadius": "10px",
+  "avatar": {
+    "defaultEnabled": true,
+    "placement": "top-right",
+    "size": "medium",
+    "shape": "circle",
+    "border": "thin"
+  }
 }

@@ -1,7 +1,8 @@
-import { ipcMain, BrowserWindow, dialog } from "electron"
+import { ipcMain, BrowserWindow, dialog, app } from "electron"
 import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext, switchResume, removeResumeSession } from "./opencode"
 import path from "path"
 import fs from "fs"
+import os from "os"
 import { log } from "./logger"
 import {
   getTemplatesDir,
@@ -239,12 +240,26 @@ export function setupIPC() {
     const html = generateHTML(data, template, visualThemeName)
 
     return new Promise((resolve, reject) => {
+      let tmpHtmlPath = ""
       const cleanup = () => {
         try { win.destroy() } catch { /* ignore */ }
+        if (tmpHtmlPath) {
+          try { fs.unlinkSync(tmpHtmlPath) } catch { /* ignore */ }
+        }
       }
 
       win.webContents.on("did-finish-load", async () => {
         try {
+          await win.webContents.executeJavaScript(`
+            Promise.all(Array.from(document.images).map(img => {
+              if (img.complete && img.naturalHeight !== 0) return Promise.resolve()
+              return new Promise(resolve => {
+                img.addEventListener('load', resolve, { once: true })
+                img.addEventListener('error', resolve, { once: true })
+                setTimeout(resolve, 5000)
+              })
+            })).then(() => true)
+          `)
           const pdfBuffer = await win.webContents.printToPDF({
             printBackground: true,
             preferCSSPageSize: true,
@@ -289,7 +304,12 @@ export function setupIPC() {
         reject(new Error(`加载失败: ${errorDescription}`))
       })
 
-      win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      const tmpDir = path.join(os.tmpdir(), "resume-ai-pdf")
+      fs.mkdirSync(tmpDir, { recursive: true })
+      const filePath = path.join(tmpDir, `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.html`)
+      tmpHtmlPath = filePath
+      fs.writeFileSync(filePath, html, "utf-8")
+      win.loadFile(filePath)
     })
   })
 

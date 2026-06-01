@@ -33,5 +33,12 @@
     "entryGap": "7px"
   },
   "sidebarWidth": "28%",
-  "borderRadius": "4px"
+  "borderRadius": "4px",
+  "avatar": {
+    "defaultEnabled": false,
+    "placement": "sidebar-top",
+    "size": "small",
+    "shape": "circle",
+    "border": "thin"
+  }
 }

@@ -3,7 +3,7 @@
   "label": "典雅蓝",
   "description": "经典商务风格，深蓝主调，精致底线装饰，适合金融、咨询、法律等行业",
   "layout": "single-column",
-  "headerStyle": "centered",
+  "headerStyle": "left",
   "decorationStyle": "dot",
   "colors": {
     "primary": "#1a56db",
@@ -30,5 +30,12 @@
     "sectionGap": "18px",
     "entryGap": "10px"
   },
-  "borderRadius": "4px"
+  "borderRadius": "4px",
+  "avatar": {
+    "defaultEnabled": true,
+    "placement": "top-right",
+    "size": "medium",
+    "shape": "circle",
+    "border": "thin"
+  }
 }

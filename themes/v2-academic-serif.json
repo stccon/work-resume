@@ -1,0 +1,59 @@
+{
+  "name": "v2-academic-serif",
+  "label": "学术典雅 Serif",
+  "description": "衬线大姓名+罗马数字章节+boxed 标题，Overleaf/Pro Academic CV 学术风，适合教授/博士/科研机构",
+  "series": "v2",
+  "family": "editorial",
+  "language": "auto",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#2a2520",
+    "primaryLight": "#f4f1ec",
+    "text": "#1f1b16",
+    "textMuted": "#6b6259",
+    "background": "#fefdf9",
+    "border": "#d6cfc3",
+    "divider": "#2a2520",
+    "accent": "#5c4a2f"
+  },
+  "fonts": {
+    "heading": "'Alegreya', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, 'Times New Roman', serif",
+    "body": "'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, 'Times New Roman', serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "34px",
+    "titleFontSize": "13px",
+    "sectionTitleFontSize": "13px",
+    "bodyFontSize": "11.5px",
+    "lineHeight": "1.7",
+    "nameLetterSpacing": "-0.02em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.18em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "56px",
+    "sectionGap": "26px",
+    "entryGap": "16px"
+  },
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "minimal",
+    "sectionTitleRule": "boxed",
+    "contactSeparator": "  ·  ",
+    "showHeaderDivider": false,
+    "nameStyle": "serif-large",
+    "bulletStyle": "none",
+    "tagStyle": "underline",
+    "avatar": {
+      "defaultEnabled": false,
+      "placement": "top-left",
+      "size": "small",
+      "shape": "square",
+      "border": "thin"
+    }
+  }
+}

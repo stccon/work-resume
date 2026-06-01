@@ -1,0 +1,59 @@
+{
+  "name": "v2-modern-pro",
+  "label": "现代商务 Pro",
+  "description": "深藏蓝+精致分隔线，麦肯锡/高盛投行风格，适合金融/咨询/法律/外企中高层",
+  "series": "v2",
+  "family": "modern",
+  "language": "auto",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#0f2c5c",
+    "primaryLight": "#eef2f8",
+    "text": "#0f172a",
+    "textMuted": "#64748b",
+    "background": "#ffffff",
+    "border": "#d4dae3",
+    "divider": "#0f2c5c",
+    "accent": "#0f2c5c"
+  },
+  "fonts": {
+    "heading": "Georgia, 'Source Han Serif SC', 'Noto Serif SC', 'PingFang SC', serif",
+    "body": "-apple-system, 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "30px",
+    "titleFontSize": "13px",
+    "sectionTitleFontSize": "13px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.5",
+    "nameLetterSpacing": "-0.01em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.14em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "48px",
+    "sectionGap": "22px",
+    "entryGap": "12px"
+  },
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "split",
+    "sectionTitleRule": "double-line",
+    "contactSeparator": "  |  ",
+    "showHeaderDivider": false,
+    "nameStyle": "serif-large",
+    "bulletStyle": "dash",
+    "tagStyle": "pill",
+    "avatar": {
+      "defaultEnabled": true,
+      "placement": "top-right",
+      "size": "medium",
+      "shape": "circle",
+      "border": "thin"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "v2-typst-monospace",
+  "label": "极客工程师 Monospace",
+  "description": "全等宽字体+代码风格装饰，neat-cv/Linear changelog 工程师感，适合开发者/技术博主/独立开发者",
+  "series": "v2",
+  "family": "minimal",
+  "language": "auto",
+  "layout": "single-column",
+  "headerStyle": "left",
+  "decorationStyle": "none",
+  "colors": {
+    "primary": "#0a0a0a",
+    "primaryLight": "#f0f0f0",
+    "text": "#0a0a0a",
+    "textMuted": "#525252",
+    "background": "#ffffff",
+    "border": "#d4d4d4",
+    "divider": "#0a0a0a",
+    "accent": "#0a0a0a"
+  },
+  "fonts": {
+    "heading": "ui-monospace, 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace",
+    "body": "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace",
+    "mono": "ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+  },
+  "typography": {
+    "nameFontSize": "24px",
+    "titleFontSize": "12px",
+    "sectionTitleFontSize": "11px",
+    "bodyFontSize": "11px",
+    "lineHeight": "1.6",
+    "nameLetterSpacing": "-0.01em",
+    "sectionTitleTransform": "uppercase",
+    "sectionTitleLetterSpacing": "0.12em"
+  },
+  "sectionStyle": "minimal",
+  "spacing": {
+    "pagePadding": "48px",
+    "sectionGap": "24px",
+    "entryGap": "12px"
+  },
+  "borderRadius": "0",
+  "v2Config": {
+    "headerVariant": "minimal",
+    "sectionTitleRule": "short-line",
+    "contactSeparator": "  //  ",
+    "showHeaderDivider": true,
+    "nameStyle": "default",
+    "bulletStyle": "arrow",
+    "tagStyle": "underline",
+    "avatar": {
+      "defaultEnabled": false,
+      "placement": "top-right",
+      "size": "small",
+      "shape": "square",
+      "border": "none"
+    }
+  }
+}

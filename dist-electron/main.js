@@ -25,6 +25,7 @@ const electron = require("electron");
 const path = require("path");
 const fs = require("fs");
 const child_process = require("child_process");
+const os = require("os");
 const logDir = path.join(__dirname, "..", "logs");
 const logFile = path.join(logDir, `debug-${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.log`);
 if (!fs.existsSync(logDir)) {
@@ -357,7 +358,8 @@ function renderResumeCSS(theme) {
   const s = theme.spacing;
   const f = theme.fonts;
   const r = theme.borderRadius;
-  return `* { margin:0; padding:0; box-sizing:border-box; }
+  const v2 = theme.v2Config;
+  const baseCSS = `* { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:${f.body}; font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; background:${c.background}; }
 
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
@@ -439,10 +441,205 @@ body { font-family:${f.body}; font-size:${t.bodyFontSize}; color:${c.text}; line
 .resume-sidebar .resume-skills-cat-label { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
 .resume-main { background:${c.background}; padding:${s.pagePadding}; }
 .resume-footer { text-align:center; font-size:10px; color:${c.textMuted}; margin-top:24px; padding-top:12px; border-top:1px solid ${c.border}; }`;
+  const avatarCSS = renderAvatarCSS(theme);
+  if (theme.series !== "v2" || !v2) {
+    return baseCSS + "\n" + avatarCSS;
+  }
+  const v2CSS = renderV2CSS(theme);
+  return baseCSS + "\n" + avatarCSS + "\n" + v2CSS;
+}
+function renderAvatarCSS(theme) {
+  const c = theme.colors;
+  const accentColor = c.accent || c.primary;
+  const sizeMap = { small: "40px", medium: "64px", large: "96px" };
+  const shapeMap = { circle: "50%", square: "0", rounded: "8px" };
+  const sizes = ["small", "medium", "large"].map((sz) => {
+    const px = sizeMap[sz];
+    return `.resume-avatar.size-${sz} { width:${px}; height:${px}; }`;
+  }).join("\n");
+  const shapes = ["circle", "square", "rounded"].map((sh) => {
+    const r = shapeMap[sh];
+    return `.resume-avatar.shape-${sh} { border-radius:${r}; }`;
+  }).join("\n");
+  const borderNone = `.resume-avatar.border-none { box-shadow:none; border:none; }`;
+  const borderThin = `.resume-avatar.border-thin { box-shadow:0 0 0 1px ${c.border}; }`;
+  const borderThick = `.resume-avatar.border-thick { box-shadow:0 0 0 3px ${c.background}, 0 0 0 4px ${c.primary}; padding:2px; background:${c.background}; }`;
+  const borderColored = `.resume-avatar.border-colored { box-shadow:0 0 0 2px ${c.background}, 0 0 0 4px ${accentColor}; padding:2px; background:${accentColor}; }`;
+  return `
+.resume-avatar { display:block; object-fit:cover; flex-shrink:0; box-sizing:border-box; vertical-align:top; max-width:100%; }
+.resume-avatar.placement-top-right { margin-left:16px; margin-bottom:8px; }
+.resume-avatar.placement-top-left { margin-right:16px; margin-bottom:8px; }
+.resume-avatar.placement-inline-left { margin-right:12px; align-self:flex-start; }
+.resume-avatar.placement-sidebar-top { display:block; margin:0 auto 16px; }
+.resume-avatar.placement-magazine-top { display:block; margin:0 0 16px; }
+${sizes}
+${shapes}
+${borderNone}
+${borderThin}
+${borderThick}
+${borderColored}
+
+.resume-header.with-avatar-top-right { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+.resume-header.with-avatar-top-right .resume-avatar-block { flex:0 0 auto; }
+.resume-header.with-avatar-top-right .resume-name-block { flex:1 1 auto; min-width:0; }
+
+.resume-header.with-avatar-top-left { display:flex; align-items:flex-start; gap:16px; }
+.resume-header.with-avatar-top-left .resume-avatar-block { flex:0 0 auto; }
+.resume-header.with-avatar-top-left .resume-name-block { flex:1 1 auto; min-width:0; }
+
+.resume-header.with-avatar-inline-left { display:flex; align-items:flex-start; gap:12px; }
+.resume-header.with-avatar-inline-left .resume-avatar-block { flex:0 0 auto; }
+.resume-header.with-avatar-inline-left .resume-name-block { flex:1 1 auto; min-width:0; }
+
+.resume-sidebar.with-sidebar-avatar { text-align:center; }
+.resume-sidebar.with-sidebar-avatar .resume-header { text-align:center; }
+.resume-sidebar.with-sidebar-avatar .resume-header .resume-contact { justify-content:center; }
+
+@media print {
+  .resume-avatar { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .resume-avatar.size-small { width:40px !important; height:40px !important; }
+  .resume-avatar.size-medium { width:64px !important; height:64px !important; }
+  .resume-avatar.size-large { width:96px !important; height:96px !important; }
+  .resume-header.with-avatar-top-right,
+  .resume-header.with-avatar-top-left,
+  .resume-header.with-avatar-inline-left { display:flex !important; align-items:flex-start !important; }
+  .resume-header.with-avatar-top-right .resume-avatar-block,
+  .resume-header.with-avatar-top-left .resume-avatar-block,
+  .resume-header.with-avatar-inline-left .resume-avatar-block { flex:0 0 auto !important; }
+}
+`;
+}
+function renderV2CSS(theme) {
+  const c = theme.colors;
+  const t = theme.typography;
+  const s = theme.spacing;
+  const f = theme.fonts;
+  const v2 = theme.v2Config;
+  const family = theme.family;
+  const monoFont = f.mono || "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
+  const dividerColor = c.divider || c.border;
+  const accentColor = c.accent || c.primary;
+  const nameLetterSpacing = t.nameLetterSpacing || "normal";
+  const sectionTransform = t.sectionTitleTransform || "none";
+  const sectionLetterSpacing = t.sectionTitleLetterSpacing || "normal";
+  const nameStyleRules = v2.nameStyle === "uppercase" ? `text-transform:uppercase; letter-spacing:0.08em; font-weight:600;` : v2.nameStyle === "serif-large" ? `font-family:${f.heading}; font-weight:400; letter-spacing:-0.01em; font-style:normal;` : `letter-spacing:${nameLetterSpacing};`;
+  const bulletContent = v2.bulletStyle === "square" ? "▪" : v2.bulletStyle === "dash" ? "—" : v2.bulletStyle === "arrow" ? "›" : v2.bulletStyle === "none" ? "" : "•";
+  const tagCSS = v2.tagStyle === "flat" ? `background:${c.background}; color:${c.text}; border:1px solid ${c.border}; border-radius:0; padding:2px 10px;` : v2.tagStyle === "underline" ? `background:transparent; color:${c.text}; border-bottom:1px solid ${c.primary}; border-radius:0; padding:0 2px 1px;` : `background:${c.primaryLight}; color:${c.primary}; border-radius:999px; padding:2px 10px;`;
+  let sectionTitleRules = "";
+  let sectionTitleAfterRules = "";
+  if (v2.sectionTitleRule === "full-line") {
+    sectionTitleRules = `font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.text}; border-bottom:1px solid ${dividerColor}; padding-bottom:6px; letter-spacing:${sectionLetterSpacing}; ${sectionTransform === "uppercase" ? "text-transform:uppercase;" : ""}`;
+  } else if (v2.sectionTitleRule === "short-line") {
+    sectionTitleRules = `font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.text}; border-bottom:none; padding-bottom:0; letter-spacing:${sectionLetterSpacing}; ${sectionTransform === "uppercase" ? "text-transform:uppercase;" : ""}`;
+    sectionTitleAfterRules = `display:block; content:""; width:36px; height:2px; background:${accentColor}; margin-top:6px;`;
+  } else if (v2.sectionTitleRule === "double-line") {
+    sectionTitleRules = `font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.text}; border-top:1px solid ${dividerColor}; border-bottom:1px solid ${dividerColor}; padding:6px 0; letter-spacing:${sectionLetterSpacing}; ${sectionTransform === "uppercase" ? "text-transform:uppercase;" : ""}`;
+  } else if (v2.sectionTitleRule === "boxed") {
+    sectionTitleRules = `font-size:${t.sectionTitleFontSize}; font-weight:700; color:${c.background}; background:${c.text}; padding:4px 12px; display:inline-block; letter-spacing:${sectionLetterSpacing}; ${sectionTransform === "uppercase" ? "text-transform:uppercase;" : ""}`;
+  }
+  const contactSeparator = v2.contactSeparator || " · ";
+  const headerDividerCSS = v2.showHeaderDivider ? `border-bottom:1px solid ${dividerColor}; padding-bottom:16px;` : "";
+  const headerVariantCSS = v2.headerVariant === "split" ? `display:flex; align-items:flex-end; justify-content:space-between; gap:24px;` : v2.headerVariant === "magazine" ? `text-align:left; border-bottom:2px solid ${c.text}; padding-bottom:14px;` : `text-align:left; ${headerDividerCSS}`;
+  return `
+/* === V2 SERIES: ${(family == null ? void 0 : family.toUpperCase()) || "PREMIUM"} === */
+.resume-document { font-feature-settings:"kern","liga","calt"; text-rendering:optimizeLegibility; -webkit-font-smoothing:antialiased; }
+.resume-document.lang-en { font-family:${f.body}; }
+.resume-document.lang-zh { font-family:${f.body}; }
+
+.resume-header.v2 { ${headerVariantCSS} }
+.resume-header.v2 .resume-name { ${nameStyleRules} }
+.resume-header.v2.split .resume-name-block { flex:1; }
+.resume-header.v2.split .resume-contact-block { text-align:right; font-size:11px; color:${c.textMuted}; }
+.resume-header.v2 .resume-contact { display:block; margin-top:6px; font-size:11px; color:${c.textMuted}; }
+.resume-header.v2 .resume-contact span + span::before { content:"${contactSeparator}"; color:${c.textMuted}; margin:0 6px; opacity:0.6; }
+.resume-header.v2 .resume-title { font-family:${f.body}; font-size:${t.titleFontSize}; color:${c.textMuted}; margin-top:4px; font-weight:400; letter-spacing:0.02em; }
+
+${v2.headerVariant === "magazine" ? `.resume-header.v2 .resume-title { font-style:italic; color:${c.textMuted}; }
+.resume-header.v2 .resume-contact span + span::before { content:"${contactSeparator}"; color:${accentColor}; margin:0 8px; opacity:0.8; }` : ""}
+
+${v2.headerVariant === "minimal" ? `.resume-header.v2 .resume-name { font-weight:600; }` : ""}
+
+.resume-section.v2 { margin-bottom:${s.sectionGap}; }
+
+.resume-section-title.v2 { ${sectionTitleRules} margin-bottom:10px; }
+${sectionTitleAfterRules ? `.resume-section-title.v2::after { ${sectionTitleAfterRules} }` : ""}
+
+.resume-section-title.v2.centered { text-align:center; }
+.resume-section-title.v2.centered::after { margin-left:auto; margin-right:auto; }
+
+.resume-body-text.v2 { font-size:${t.bodyFontSize}; line-height:${t.lineHeight}; white-space:pre-wrap; color:${c.text}; }
+.resume-prose.v2 p { margin-bottom:4px; line-height:${t.lineHeight}; color:${c.text}; }
+
+.resume-bullets.v2 { margin:4px 0; padding:0; list-style:none; }
+.resume-bullets.v2 li { position:relative; padding-left:16px; margin-bottom:4px; font-size:${t.bodyFontSize}; line-height:${t.lineHeight}; color:${c.text}; }
+.resume-bullets.v2 li::before { content:"${bulletContent}"; position:absolute; left:0; top:0; color:${accentColor}; font-weight:700; }
+${v2.bulletStyle === "none" ? ".resume-bullets.v2 li { padding-left:0; } .resume-bullets.v2 li::before { content:none; }" : ""}
+
+.resume-tags.v2 { display:flex; flex-wrap:wrap; gap:4px 8px; margin:6px 0; }
+.resume-tag.v2 { display:inline-block; ${tagCSS} font-size:10px; line-height:1.6; font-family:${f.body}; }
+
+.resume-field-row.v2 { display:flex; margin-bottom:4px; font-size:${t.bodyFontSize}; line-height:1.5; }
+.resume-field-label.v2 { color:${c.textMuted}; width:88px; flex-shrink:0; font-weight:500; }
+.resume-field-value.v2 { color:${c.text}; }
+
+.resume-entry.v2 { margin-bottom:${s.entryGap}; }
+.resume-entry-header.v2 { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; gap:12px; }
+.resume-entry-main-title.v2 { font-family:${f.heading}; font-weight:600; font-size:${parseInt(t.bodyFontSize) + 1}px; color:${c.text}; }
+.resume-entry-subtitle.v2 { font-size:11px; color:${c.textMuted}; margin-top:2px; font-weight:400; }
+.resume-entry-date.v2 { font-family:${f.mono ? monoFont : f.body}; font-size:10.5px; color:${c.textMuted}; white-space:nowrap; font-weight:500; letter-spacing:0.01em; }
+.resume-entry-divider.v2 { border:none; border-top:1px solid ${dividerColor}; margin:${s.entryGap} 0; }
+
+${v2.sectionTitleRule === "boxed" ? `.resume-section.v2 { padding-top:0; }` : ""}
+
+${family === "minimal" ? `
+.resume-document { letter-spacing:-0.005em; }
+.resume-name { font-feature-settings:"ss01","cv11"; }
+.resume-tags.v2 { gap:2px 6px; }
+` : ""}
+
+${family === "modern" ? `
+.resume-document { letter-spacing:0.01em; }
+.resume-section.v2 { padding-bottom:0; }
+.resume-section-title.v2 { font-weight:600; }
+` : ""}
+
+${family === "editorial" ? `
+.resume-document { letter-spacing:0.005em; }
+.resume-name { font-weight:400; }
+.resume-section-title.v2 { font-weight:500; font-style:italic; }
+.resume-tags.v2 { gap:6px 10px; }
+` : ""}
+
+.resume-two-column.v2 .resume-sidebar { padding:${s.pagePadding}; }
+.resume-two-column.v2 .resume-sidebar .resume-name { color:${c.sidebarText || "#fff"}; }
+.resume-two-column.v2 .resume-sidebar .resume-title { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-two-column.v2 .resume-sidebar .resume-contact { color:${c.sidebarText ? `${c.sidebarText}99` : "#ffffff99"}; }
+.resume-two-column.v2 .resume-sidebar .resume-section { margin-bottom:${parseInt(s.sectionGap) - 6}px; }
+.resume-two-column.v2 .resume-sidebar .resume-section-title.v2 { color:${c.sidebarText || "#fff"}; ${sectionTitleRules} }
+${sectionTitleAfterRules ? `.resume-two-column.v2 .resume-sidebar .resume-section-title.v2::after { ${sectionTitleAfterRules} background:${c.sidebarText || "#fff"}; }` : ""}
+.resume-two-column.v2 .resume-sidebar .resume-body-text.v2,
+.resume-two-column.v2 .resume-sidebar .resume-prose.v2 p { color:${c.sidebarText || "#fff"}; }
+.resume-two-column.v2 .resume-sidebar .resume-field-label.v2 { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-two-column.v2 .resume-sidebar .resume-field-value.v2 { color:${c.sidebarText || "#fff"}; }
+.resume-two-column.v2 .resume-sidebar .resume-entry-main-title.v2 { color:${c.sidebarText || "#fff"}; }
+.resume-two-column.v2 .resume-sidebar .resume-entry-subtitle.v2 { color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"}; }
+.resume-two-column.v2 .resume-sidebar .resume-entry-date.v2 { color:${c.sidebarText ? `${c.sidebarText}b3` : "#ffffffb3"}; }
+.resume-two-column.v2 .resume-sidebar .resume-entry-divider.v2 { border-top-color:${c.sidebarText ? `${c.sidebarText}33` : "#ffffff33"}; }
+.resume-two-column.v2 .resume-sidebar .resume-bullets.v2 li { color:${c.sidebarText || "#fff"}; }
+.resume-two-column.v2 .resume-sidebar .resume-bullets.v2 li::before { color:${c.sidebarText || "#fff"}; opacity:0.85; }
+.resume-two-column.v2 .resume-sidebar .resume-tag.v2 {
+  ${v2.tagStyle === "flat" ? `background:transparent; color:${c.sidebarText || "#fff"}; border:1px solid ${c.sidebarText ? `${c.sidebarText}55` : "#ffffff55"}; border-radius:0; padding:2px 10px;` : v2.tagStyle === "underline" ? `background:transparent; color:${c.sidebarText || "#fff"}; border-bottom:1px solid ${c.sidebarText ? `${c.sidebarText}88` : "#ffffff88"}; border-radius:0; padding:0 2px 1px;` : `background:${c.sidebarText ? `${c.sidebarText}22` : "#ffffff22"}; color:${c.sidebarText || "#fff"}; border-radius:999px; padding:2px 10px;`}
+}
+.resume-two-column.v2 .resume-sidebar .resume-skills-cat-label { color:${c.sidebarText ? `${c.sidebarText}b3` : "#ffffffb3"}; }
+`;
 }
 function sectionTitleClass(theme) {
+  const isV2 = theme.series === "v2";
   const base = `resume-section-title ${theme.sectionStyle}`;
   const deco = theme.decorationStyle === "line" && theme.sectionStyle === "underlined" ? "" : theme.decorationStyle;
+  if (isV2) {
+    return `resume-section-title v2 ${theme.sectionStyle}`;
+  }
   const centered = theme.headerStyle === "centered" && theme.decorationStyle === "dot" ? " centered" : "";
   return deco ? `${base} ${deco}${centered}` : base;
 }
@@ -490,28 +687,36 @@ function classifyField(fieldId) {
   if (k.includes("tech") || k.includes("skill") || k.includes("tool") || k.includes("stack") || k.includes("keyword") || k.includes("language")) return "tags";
   return "label-value";
 }
-function renderProse(value) {
+function renderProse(value, v2 = false) {
   const s = formatValue(value);
   const lines = s.split("\n").filter((l) => l.trim());
-  return `<div class="resume-prose">${lines.map((l) => `<p>${l}</p>`).join("")}</div>`;
+  const cls = v2 ? "resume-prose v2" : "resume-prose";
+  return `<div class="${cls}">${lines.map((l) => `<p>${l}</p>`).join("")}</div>`;
 }
-function renderBulletList(value) {
+function renderBulletList(value, v2 = false) {
   const s = formatValue(value);
   const lines = s.split("\n").filter((l) => l.trim());
-  return `<ul class="resume-bullets">${lines.map((l) => `<li>${l}</li>`).join("")}</ul>`;
+  const cls = v2 ? "resume-bullets v2" : "resume-bullets";
+  return `<ul class="${cls}">${lines.map((l) => `<li>${l}</li>`).join("")}</ul>`;
 }
-function renderTags(value) {
+function renderTags(value, v2 = false) {
   const s = formatValue(value);
   const items = s.split(/[,，、\n]/).map((s2) => s2.trim()).filter(Boolean);
-  return `<div class="resume-tags">${items.map((t) => `<span class="resume-tag">${t}</span>`).join("")}</div>`;
+  const cls = v2 ? "resume-tag v2" : "resume-tag";
+  const containerCls = v2 ? "resume-tags v2" : "resume-tags";
+  return `<div class="${containerCls}">${items.map((t) => `<span class="${cls}">${htmlEscapedText(t)}</span>`).join("")}</div>`;
 }
-function renderLabelledField(label, value) {
-  return `<div class="resume-field-row"><span class="resume-field-label">${label}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`;
+function renderLabelledField(label, value, v2 = false) {
+  const rowCls = v2 ? "resume-field-row v2" : "resume-field-row";
+  const labelCls = v2 ? "resume-field-label v2" : "resume-field-label";
+  const valueCls = v2 ? "resume-field-value v2" : "resume-field-value";
+  return `<div class="${rowCls}"><span class="${labelCls}">${label}：</span><span class="${valueCls}">${formatValue(value)}</span></div>`;
 }
 function renderSkillsSection(section, sectionData, theme, sidebar) {
   const c = theme.colors;
   const t = theme.typography;
   theme.fonts;
+  const isV2 = theme.series === "v2";
   const categoryGroups = /* @__PURE__ */ new Map();
   const templateLabels = /* @__PURE__ */ new Map();
   for (const field of section.fields || []) {
@@ -536,7 +741,7 @@ function renderSkillsSection(section, sectionData, theme, sidebar) {
       }
       continue;
     }
-    overviewHtml.push(`<p class="resume-body-text">${formatValue(value)}</p>`);
+    overviewHtml.push(`<p class="resume-body-text${isV2 ? " v2" : ""}">${formatValue(value)}</p>`);
   }
   const parts = [];
   if (overviewHtml.length > 0) {
@@ -544,11 +749,12 @@ function renderSkillsSection(section, sectionData, theme, sidebar) {
   }
   for (const [cat, values] of categoryGroups) {
     const catLabel = templateLabels.get(cat) || getFieldLabel(section, cat);
-    const tagsHtml = values.map((v) => `<span class="resume-tag">${htmlEscapedText(v)}</span>`).join("");
+    const tagCls = isV2 ? "resume-tag v2" : "resume-tag";
+    const tagsHtml = values.map((v) => `<span class="${tagCls}">${htmlEscapedText(v)}</span>`).join("");
     const catLabelStyle = sidebar ? `font-size:${t.bodyFontSize};color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"};white-space:nowrap;min-width:60px` : `font-size:${t.bodyFontSize};color:${c.textMuted};white-space:nowrap;min-width:60px`;
     parts.push(`<div class="resume-skills-category" style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">
       <span class="resume-skills-cat-label" style="${catLabelStyle}">${catLabel}：</span>
-      <div class="resume-tags" style="margin:0">
+      <div class="resume-tags${isV2 ? " v2" : ""}" style="margin:0">
         ${tagsHtml}
       </div>
     </div>`);
@@ -588,10 +794,11 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
   const isSummary = section.id === "summary";
   const isMulti = ["experience", "education", "projects"].includes(section.id) && isMultiEntry(sectionData);
   const isSkills = section.id === "skills";
+  const isV2 = theme.series === "v2";
   if (isSummary) {
     const text = Object.values(sectionData)[0];
     if (!text) return "";
-    return `<p class="resume-body-text">${formatValue(text)}</p>`;
+    return `<p class="resume-body-text${isV2 ? " v2" : ""}">${formatValue(text)}</p>`;
   }
   if (isSkills) {
     return renderSkillsSection(section, sectionData, theme, sidebar);
@@ -628,34 +835,40 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
         grouped.labelled.keys.push(k);
         grouped.labelled.labels.push(getFieldLabel(section, k));
       }
-      let html = `<div class="resume-entry">`;
+      const entryCls = isV2 ? "resume-entry v2" : "resume-entry";
+      const headerCls = isV2 ? "resume-entry-header v2" : "resume-entry-header";
+      const mainTitleCls = isV2 ? "resume-entry-main-title v2" : "resume-entry-main-title";
+      const subTitleCls = isV2 ? "resume-entry-subtitle v2" : "resume-entry-subtitle";
+      const dateCls = isV2 ? "resume-entry-date v2" : "resume-entry-date";
+      const dividerCls = isV2 ? "resume-entry-divider v2" : "resume-entry-divider";
+      let html = `<div class="${entryCls}">`;
       if (mainTitle || hasDate) {
-        html += `<div class="resume-entry-header">`;
+        html += `<div class="${headerCls}">`;
         html += `<div>`;
-        if (mainTitle) html += `<span class="resume-entry-main-title">${formatValue(mainTitle)}</span>`;
-        if (subTitle) html += `<div class="resume-entry-subtitle">${formatValue(subTitle)}</div>`;
+        if (mainTitle) html += `<span class="${mainTitleCls}">${formatValue(mainTitle)}</span>`;
+        if (subTitle) html += `<div class="${subTitleCls}">${formatValue(subTitle)}</div>`;
         html += `</div>`;
-        if (hasDate) html += `<span class="resume-entry-date">${formatValue(dateStr)}</span>`;
+        if (hasDate) html += `<span class="${dateCls}">${formatValue(dateStr)}</span>`;
         html += `</div>`;
       }
       if (detail) {
-        html += renderProse(detail);
+        html += renderProse(detail, isV2);
       }
       for (const v of grouped.bullets) {
-        html += renderBulletList(v);
+        html += renderBulletList(v, isV2);
       }
       for (const v of grouped.prose) {
-        html += renderProse(v);
+        html += renderProse(v, isV2);
       }
       for (const v of grouped.tags) {
-        html += renderTags(v);
+        html += renderTags(v, isV2);
       }
       for (let i = 0; i < grouped.labelled.keys.length; i++) {
-        html += renderLabelledField(grouped.labelled.labels[i], entry.fields[grouped.labelled.keys[i]]);
+        html += renderLabelledField(grouped.labelled.labels[i], entry.fields[grouped.labelled.keys[i]], isV2);
       }
       html += `</div>`;
       if (ei < entries.length - 1) {
-        html += `<hr class="resume-entry-divider" />`;
+        html += `<hr class="${dividerCls}" />`;
       }
       return html;
     });
@@ -665,12 +878,13 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
   for (const field of section.fields || []) {
     const value = sectionData[field.id];
     if (!value) continue;
-    parts.push(`<div class="resume-field-row"><span class="resume-field-label">${htmlEscapedText(field.label)}：</span><span class="resume-field-value">${formatValue(value)}</span></div>`);
+    parts.push(renderLabelledField(htmlEscapedText(field.label), value, isV2));
   }
   for (const [k, v] of Object.entries(sectionData)) {
     if ((_a = section.fields) == null ? void 0 : _a.some((f) => f.id === k)) continue;
+    if (k === "avatar") continue;
     if (!v) continue;
-    parts.push(`<div class="resume-field-row"><span class="resume-field-label">${getFieldLabel(section, k)}：</span><span class="resume-field-value">${formatValue(v)}</span></div>`);
+    parts.push(renderLabelledField(getFieldLabel(section, k), v, isV2));
   }
   return `<div class="resume-section-content">${parts.join("")}</div>`;
 }
@@ -682,7 +896,8 @@ function renderSections(template, data, theme, sectionIds) {
     if (!sectionData || Object.keys(sectionData).length === 0) continue;
     const content = renderSectionContent(section, sectionData, theme, false);
     if (!content) continue;
-    const sectionClass = theme.sectionStyle === "card" ? "resume-section card" : "resume-section";
+    const isV2 = theme.series === "v2";
+    const sectionClass = theme.sectionStyle === "card" ? "resume-section card" : isV2 ? "resume-section v2" : "resume-section";
     parts.push(`<div class="${sectionClass}">
       <div class="${sectionTitleClass(theme)}">${htmlEscapedText(section.label)}</div>
       ${content}
@@ -690,30 +905,186 @@ function renderSections(template, data, theme, sectionIds) {
   }
   return parts.join("");
 }
+function detectLanguage(data) {
+  var _a, _b;
+  const sample = [
+    (_a = data.sections.personal) == null ? void 0 : _a.name,
+    (_b = data.sections.personal) == null ? void 0 : _b.title,
+    data.sections.summary && Object.values(data.sections.summary)[0]
+  ].filter(Boolean).join(" ");
+  if (!sample) return "chinese";
+  return /[\u4e00-\u9fa5]/.test(sample) ? "chinese" : "english";
+}
+function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
+  const v2 = theme.v2Config;
+  const avatarCfg = v2.avatar;
+  if (v2.headerVariant === "split") {
+    if (avatarHtml && avatarCfg && avatarCfg.placement === "top-right") {
+      return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-right">
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        </div>
+        <div class="resume-avatar-block">${avatarHtml}</div>
+      </div>`;
+    }
+    if (avatarHtml && avatarCfg && avatarCfg.placement === "top-left") {
+      return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-left">
+        <div class="resume-avatar-block">${avatarHtml}</div>
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        </div>
+      </div>`;
+    }
+    if (avatarHtml && avatarCfg && avatarCfg.placement === "inline-left") {
+      return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-inline-left">
+        <div class="resume-avatar-block">${avatarHtml}</div>
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          ${contactHtml}
+        </div>
+      </div>`;
+    }
+    return `<div class="${`resume-header v2 ${v2.headerVariant}`}">
+      <div class="resume-name-block">
+        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+      </div>
+      <div class="resume-contact-block">${contactHtml.replace(/<div class="resume-contact">([\s\S]*?)<\/div>/, "$1")}</div>
+    </div>`;
+  }
+  if (avatarHtml && avatarCfg && (avatarCfg.placement === "top-right" || avatarCfg.placement === "magazine-top")) {
+    return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-right">
+      <div class="resume-name-block">
+        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        ${contactHtml}
+      </div>
+      <div class="resume-avatar-block">${avatarHtml}</div>
+    </div>`;
+  }
+  if (avatarHtml && avatarCfg && avatarCfg.placement === "top-left") {
+    return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-left">
+      <div class="resume-avatar-block">${avatarHtml}</div>
+      <div class="resume-name-block">
+        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        ${contactHtml}
+      </div>
+    </div>`;
+  }
+  if (avatarHtml && avatarCfg && avatarCfg.placement === "inline-left") {
+    return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-inline-left">
+      <div class="resume-avatar-block">${avatarHtml}</div>
+      <div class="resume-name-block">
+        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        ${contactHtml}
+      </div>
+    </div>`;
+  }
+  return `<div class="${`resume-header v2 ${v2.headerVariant}`}">
+    <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+    ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+    ${contactHtml}
+  </div>`;
+}
+function getAvatarConfig(theme) {
+  var _a;
+  if ((_a = theme.v2Config) == null ? void 0 : _a.avatar) return theme.v2Config.avatar;
+  return theme.avatar;
+}
+function renderAvatarElement(avatarUrl, theme) {
+  const cfg = getAvatarConfig(theme);
+  if (!cfg) return "";
+  const placement = cfg.placement || "top-right";
+  const size = cfg.size || "medium";
+  const shape = cfg.shape || "circle";
+  const border = cfg.border || "none";
+  const sizeMap = { small: "40", medium: "64", large: "96" };
+  const sizePx = sizeMap[size] || "64";
+  return `<img class="resume-avatar placement-${placement} size-${size} shape-${shape} border-${border}" src="${htmlEscapedText(avatarUrl)}" alt="头像" width="${sizePx}" height="${sizePx}" />`;
+}
 function renderResumeBody(data, template, theme) {
-  var _a, _b, _c, _d, _e, _f;
+  var _a, _b, _c, _d, _e, _f, _g;
   theme.colors;
   const s = theme.spacing;
+  const isV2 = theme.series === "v2";
+  const lang = theme.language === "auto" || !theme.language ? detectLanguage(data) : theme.language;
   const name = ((_a = data.sections.personal) == null ? void 0 : _a.name) || ((_b = data.sections.personal) == null ? void 0 : _b.title) || "简历";
   const title = ((_c = data.sections.personal) == null ? void 0 : _c.title) || "";
   const email = ((_d = data.sections.personal) == null ? void 0 : _d.email) || "";
   const phone = ((_e = data.sections.personal) == null ? void 0 : _e.phone) || "";
   const github = ((_f = data.sections.personal) == null ? void 0 : _f.github) || "";
+  const avatarUrl = ((_g = data.sections.personal) == null ? void 0 : _g.avatar) || "";
+  const avatarCfg = getAvatarConfig(theme);
+  const isTwoCol = theme.layout === "two-column";
+  const isSidebarTop = isTwoCol && (avatarCfg == null ? void 0 : avatarCfg.placement) === "sidebar-top";
+  const showAvatar = !!avatarUrl && !!avatarCfg;
   const contactParts = [email, phone, github].filter(Boolean);
   const contactHtml = contactParts.length > 0 ? `<div class="resume-contact">${contactParts.map((p) => `<span>${htmlEscapedText(p)}</span>`).join("")}</div>` : "";
-  const headerHtml = `<div class="resume-header ${theme.headerStyle}">
-    <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-    ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
-    ${contactHtml}
-  </div>`;
-  if (theme.layout === "two-column") {
+  const avatarHtml = showAvatar && !isSidebarTop ? renderAvatarElement(avatarUrl, theme) : "";
+  const sidebarAvatarHtml = showAvatar && isSidebarTop ? renderAvatarElement(avatarUrl, theme) : "";
+  let headerHtml;
+  if (isV2) {
+    headerHtml = renderV2Header(theme, name, title, contactHtml, avatarHtml);
+  } else if (showAvatar && !isSidebarTop) {
+    const cfg = avatarCfg;
+    const placement = cfg.placement;
+    if (placement === "top-right" || placement === "magazine-top") {
+      headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-top-right">
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          ${contactHtml}
+        </div>
+        <div class="resume-avatar-block">${avatarHtml}</div>
+      </div>`;
+    } else if (placement === "top-left") {
+      headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-top-left">
+        <div class="resume-avatar-block">${avatarHtml}</div>
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          ${contactHtml}
+        </div>
+      </div>`;
+    } else if (placement === "inline-left") {
+      headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-inline-left">
+        <div class="resume-avatar-block">${avatarHtml}</div>
+        <div class="resume-name-block">
+          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          ${contactHtml}
+        </div>
+      </div>`;
+    } else {
+      headerHtml = `<div class="resume-header ${theme.headerStyle}">
+        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        ${contactHtml}
+      </div>`;
+    }
+  } else {
+    headerHtml = `<div class="resume-header ${theme.headerStyle}">
+      <h1 class="resume-name">${htmlEscapedText(name)}</h1>
+      ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+      ${contactHtml}
+    </div>`;
+  }
+  if (isTwoCol) {
     const sidebarSections = ["personal", "skills"];
     const sidebarHtml = renderSections(template, data, theme, sidebarSections);
     const mainHtml = renderSections(template, data, theme, null);
     const footerHtml2 = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
     const sw = theme.sidebarWidth || "35%";
-    return `<div class="resume-two-column">
-      <div class="resume-sidebar" style="width:${sw};padding:${s.pagePadding}">
+    const twoColCls = isV2 ? "resume-two-column v2" : "resume-two-column";
+    const sidebarCls = sidebarAvatarHtml ? "resume-sidebar with-sidebar-avatar" : "resume-sidebar";
+    return `<div class="${twoColCls}">
+      <div class="${sidebarCls}" style="width:${sw};padding:${s.pagePadding}">
+        ${sidebarAvatarHtml ? `<div class="resume-sidebar-avatar">${sidebarAvatarHtml}</div>` : ""}
         ${headerHtml}
         ${sidebarHtml}
       </div>
@@ -725,7 +1096,8 @@ function renderResumeBody(data, template, theme) {
   }
   const sectionsHtml = renderSections(template, data, theme, null);
   const footerHtml = data.completedAt ? `<div class="resume-footer">生成时间：${new Date(data.completedAt).toLocaleString("zh-CN")}</div>` : "";
-  return `<div style="padding:${s.pagePadding}">
+  const docCls = `resume-document lang-${lang === "chinese" ? "zh" : "en"}`;
+  return `<div class="${docCls}" style="padding:${s.pagePadding}">
     ${headerHtml}
     ${sectionsHtml}
     ${footerHtml}
@@ -735,7 +1107,7 @@ function renderResumeDocument(data, template, theme, title = "简历") {
   const css = renderResumeCSS(theme);
   const body = renderResumeBody(data, template, theme);
   return `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>${htmlEscapedText(title)}</title>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=794, initial-scale=1"><title>${htmlEscapedText(title)}</title>
 <style>${css}</style></head>
 <body>${body}</body></html>`;
 }
@@ -924,15 +1296,32 @@ function setupIPC() {
     });
     const html = generateHTML(data, template, visualThemeName);
     return new Promise((resolve, reject) => {
+      let tmpHtmlPath = "";
       const cleanup = () => {
         try {
           win.destroy();
         } catch {
         }
+        if (tmpHtmlPath) {
+          try {
+            fs.unlinkSync(tmpHtmlPath);
+          } catch {
+          }
+        }
       };
       win.webContents.on("did-finish-load", async () => {
         var _a, _b;
         try {
+          await win.webContents.executeJavaScript(`
+            Promise.all(Array.from(document.images).map(img => {
+              if (img.complete && img.naturalHeight !== 0) return Promise.resolve()
+              return new Promise(resolve => {
+                img.addEventListener('load', resolve, { once: true })
+                img.addEventListener('error', resolve, { once: true })
+                setTimeout(resolve, 5000)
+              })
+            })).then(() => true)
+          `);
           const pdfBuffer = await win.webContents.printToPDF({
             printBackground: true,
             preferCSSPageSize: true,
@@ -969,7 +1358,12 @@ function setupIPC() {
         cleanup();
         reject(new Error(`加载失败: ${errorDescription}`));
       });
-      win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+      const tmpDir = path.join(os.tmpdir(), "resume-ai-pdf");
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const filePath = path.join(tmpDir, `resume-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.html`);
+      tmpHtmlPath = filePath;
+      fs.writeFileSync(filePath, html, "utf-8");
+      win.loadFile(filePath);
     });
   });
   electron.ipcMain.handle("resume:save-pdf-buffer", async (_event, buffer) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Sidebar } from "@/components/Sidebar"
 import { ChatMessage } from "@/components/ChatMessage"
 import { ChatInput } from "@/components/ChatInput"
@@ -7,6 +7,7 @@ import { FileUpload } from "@/components/FileUpload"
 import { WelcomeGuide } from "@/components/WelcomeGuide"
 import { ResumePreview } from "@/components/ResumePreview"
 import { ToastContainer, toast } from "@/components/Toast"
+import { AvatarUploader } from "@/components/AvatarUploader"
 import type { ChatMessage as ChatMessageType } from "@/adapter/ChatAdapter"
 import type { TemplateDefinition } from "@/types/template"
 import type { ResumeData } from "@/types/resume"
@@ -17,10 +18,60 @@ import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../the
 import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 
+const AVATAR_STORAGE_KEY = "user-avatar"
+const AVATAR_ENABLED_KEY = "user-avatar-enabled"
+
 const log = (tag: string, ...args: any[]) => {
   const msg = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
   console.log(`[${tag}]`, ...args)
   window.electronAPI?.log?.(tag, msg).catch(() => {})
+}
+
+function getThemeAvatarDefault(theme: VisualTheme): boolean {
+  const v2 = theme.v2Config?.avatar
+  if (v2) return v2.defaultEnabled
+  return theme.avatar?.defaultEnabled ?? false
+}
+
+function detectSampleLanguage(text: string): "chinese" | "english" {
+  if (!text) return "chinese"
+  return /[\u4e00-\u9fa5]/.test(text) ? "chinese" : "english"
+}
+
+function composeDataWithAvatar(
+  data: ResumeData | null,
+  userAvatar: string | null,
+  userEnabled: boolean | null,
+  theme: VisualTheme,
+): ResumeData | null {
+  if (!data) return data
+  const personal = { ...(data.sections.personal || {}) }
+  const hasUserAvatar = !!userAvatar
+  const themeDefault = getThemeAvatarDefault(theme)
+  const sampleText = [personal.name, personal.title, personal.email].filter(Boolean).join(" ")
+  const lang = detectSampleLanguage(sampleText)
+  const langAutoEnabled = lang === "chinese"
+
+  let shouldShow: boolean
+  if (userEnabled !== null) {
+    shouldShow = userEnabled && hasUserAvatar
+  } else {
+    shouldShow = hasUserAvatar && (themeDefault || langAutoEnabled)
+  }
+
+  if (shouldShow && userAvatar) {
+    personal.avatar = userAvatar
+  } else {
+    delete personal.avatar
+  }
+
+  return {
+    ...data,
+    sections: {
+      ...data.sections,
+      personal,
+    },
+  }
 }
 
 function App() {
@@ -39,7 +90,29 @@ function App() {
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
   const [visualThemes, setVisualThemes] = useState<VisualTheme[]>(getAllVisualThemes())
   const [currentVisualTheme, setCurrentVisualTheme] = useState<VisualTheme>(getVisualTheme(DEFAULT_VISUAL_THEME))
+  const [userAvatar, setUserAvatar] = useState<string | null>(() => {
+    try { return localStorage.getItem(AVATAR_STORAGE_KEY) } catch { return null }
+  })
+  const [avatarEnabled, setAvatarEnabled] = useState<boolean | null>(() => {
+    try {
+      const raw = localStorage.getItem(AVATAR_ENABLED_KEY)
+      return raw === null ? null : raw === "1"
+    } catch { return null }
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    try {
+      if (userAvatar) localStorage.setItem(AVATAR_STORAGE_KEY, userAvatar)
+      else localStorage.removeItem(AVATAR_STORAGE_KEY)
+    } catch { /* quota exceeded - ignore */ }
+  }, [userAvatar])
+
+  useEffect(() => {
+    try {
+      if (avatarEnabled !== null) localStorage.setItem(AVATAR_ENABLED_KEY, avatarEnabled ? "1" : "0")
+    } catch { /* ignore */ }
+  }, [avatarEnabled])
 
   const resumeDataRef = useRef(resumeData)
   resumeDataRef.current = resumeData
@@ -366,7 +439,7 @@ function App() {
   }
 
   const handleExportPDF = async () => {
-    const data = resumeData
+    const data = composedResumeData
     const tmpl = templateData
     if (!data || !tmpl) {
       toast("error", "请先生成简历数据")
@@ -407,6 +480,11 @@ function App() {
     ? savedResumes.find((r) => r.id === activeResumeId)
     : null
 
+  const composedResumeData = useMemo(
+    () => composeDataWithAvatar(resumeData, userAvatar, avatarEnabled, currentVisualTheme),
+    [resumeData, userAvatar, avatarEnabled, currentVisualTheme]
+  )
+
   return (
     <div className="flex h-screen bg-background text-foreground">
       <Sidebar
@@ -440,10 +518,17 @@ function App() {
           <div className="flex items-center gap-2">
             {resumeData && (
               <>
+                <AvatarUploader
+                  avatar={userAvatar}
+                  onChange={setUserAvatar}
+                />
                 <VisualThemePicker
                   themes={visualThemes}
                   currentTheme={currentVisualTheme}
                   onChange={handleVisualThemeChange}
+                  avatarEnabled={!!userAvatar && (avatarEnabled ?? getThemeAvatarDefault(currentVisualTheme))}
+                  onAvatarEnabledChange={(enabled) => setAvatarEnabled(enabled)}
+                  hasAvatar={!!userAvatar}
                 />
                 <button
                   onClick={handleNewChat}
@@ -506,8 +591,8 @@ function App() {
               <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
             </div>
             <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
-              {resumeData && templateData ? (
-                <ResumePreview data={resumeData} template={templateData} visualTheme={currentVisualTheme} />
+              {composedResumeData && templateData ? (
+                <ResumePreview data={composedResumeData} template={templateData} visualTheme={currentVisualTheme} />
               ) : null}
             </div>
           </div>
