@@ -347,6 +347,70 @@ export function setupIPC() {
     }
   })
 
+  ipcMain.handle("pdf:parse-resume", async (_event, filePath: string) => {
+    try {
+      const { parseResumePdf } = await import("./resume-parser")
+      const { mapToTemplate } = await import("./template-mapper")
+      const parsed = await parseResumePdf(filePath)
+      const tmpl = readTemplateJSON("general")
+      if (!tmpl) return { error: "general 模板不存在" }
+      return mapToTemplate(parsed, tmpl)
+    } catch (err: any) {
+      console.error("Resume parse error:", err)
+      return { error: err.message || String(err) }
+    }
+  })
+
+  ipcMain.handle("pdf:extract-avatar-payload", async (_event, filePath: string) => {
+    try {
+      const { extractPdfAvatarPayload } = await import("./pdf-image-extractor")
+      return await extractPdfAvatarPayload(filePath)
+    } catch (err: any) {
+      console.error("PDF avatar extraction error:", err)
+      return null
+    }
+  })
+
+  ipcMain.handle("pdf:extract-theme", async (_event, filePath: string) => {
+    try {
+      const { extractPdfTheme } = await import("./pdf-theme-extractor")
+      return await extractPdfTheme(filePath)
+    } catch (err: any) {
+      console.error("PDF theme extraction error:", err)
+      return { error: err.message || String(err) }
+    }
+  })
+
+  ipcMain.handle("theme:save-imported", async (_event, theme: Record<string, unknown>) => {
+    try {
+      const { saveImportedTheme } = await import("./imported-themes")
+      return saveImportedTheme(theme)
+    } catch (err: any) {
+      console.error("Save imported theme error:", err)
+      return { error: err.message || String(err) }
+    }
+  })
+
+  ipcMain.handle("theme:delete-imported", async (_event, themeName: string) => {
+    try {
+      const { deleteImportedTheme } = await import("./imported-themes")
+      return deleteImportedTheme(themeName)
+    } catch (err: any) {
+      console.error("Delete imported theme error:", err)
+      return { error: err.message || String(err) }
+    }
+  })
+
+  ipcMain.handle("theme:list-imported", async () => {
+    try {
+      const { getImportedThemeFiles } = await import("./imported-themes")
+      return getImportedThemeFiles().map((f) => f.name)
+    } catch (err: any) {
+      console.error("List imported themes error:", err)
+      return []
+    }
+  })
+
   // ── Last Active Resume ──
 
   ipcMain.handle("resume:set-last-active", async (_event, id: string) => {

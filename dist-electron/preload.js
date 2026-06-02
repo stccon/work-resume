@@ -32,6 +32,13 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   clearChatContext: () => electron.ipcRenderer.invoke("chat:clear-context"),
   switchResume: (resumeId) => electron.ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath) => electron.ipcRenderer.invoke("pdf:extract-style", filePath),
+  parseResume: (filePath) => electron.ipcRenderer.invoke("pdf:parse-resume", filePath),
+  extractPdfAvatarPayload: (filePath) => electron.ipcRenderer.invoke("pdf:extract-avatar-payload", filePath),
+  getFilePath: (file) => electron.webUtils.getPathForFile(file),
+  extractPdfTheme: (filePath) => electron.ipcRenderer.invoke("pdf:extract-theme", filePath),
+  saveImportedTheme: (theme) => electron.ipcRenderer.invoke("theme:save-imported", theme),
+  deleteImportedTheme: (themeName) => electron.ipcRenderer.invoke("theme:delete-imported", themeName),
+  listImportedThemes: () => electron.ipcRenderer.invoke("theme:list-imported"),
   setLastActiveResume: (id) => electron.ipcRenderer.invoke("resume:set-last-active", id),
   getLastActiveResume: () => electron.ipcRenderer.invoke("resume:get-last-active"),
   log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message)

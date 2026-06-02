@@ -1387,11 +1387,69 @@ function setupIPC() {
   });
   electron.ipcMain.handle("pdf:extract-style", async (_event, filePath) => {
     try {
-      const { extractPdfStyle } = await Promise.resolve().then(() => require("./pdf-extractor-BxKYHj3d.js"));
+      const { extractPdfStyle } = await Promise.resolve().then(() => require("./pdf-extractor-CreC-WkZ.js"));
       return await extractPdfStyle(filePath);
     } catch (err) {
       console.error("PDF extraction error:", err);
       return { error: err.message || String(err) };
+    }
+  });
+  electron.ipcMain.handle("pdf:parse-resume", async (_event, filePath) => {
+    try {
+      const { parseResumePdf } = await Promise.resolve().then(() => require("./resume-parser-D2ahUOmW.js"));
+      const { mapToTemplate } = await Promise.resolve().then(() => require("./template-mapper-D-v32c9-.js"));
+      const parsed = await parseResumePdf(filePath);
+      const tmpl = readTemplateJSON("general");
+      if (!tmpl) return { error: "general 模板不存在" };
+      return mapToTemplate(parsed, tmpl);
+    } catch (err) {
+      console.error("Resume parse error:", err);
+      return { error: err.message || String(err) };
+    }
+  });
+  electron.ipcMain.handle("pdf:extract-avatar-payload", async (_event, filePath) => {
+    try {
+      const { extractPdfAvatarPayload } = await Promise.resolve().then(() => require("./pdf-image-extractor-b7QaxVW4.js"));
+      return await extractPdfAvatarPayload(filePath);
+    } catch (err) {
+      console.error("PDF avatar extraction error:", err);
+      return null;
+    }
+  });
+  electron.ipcMain.handle("pdf:extract-theme", async (_event, filePath) => {
+    try {
+      const { extractPdfTheme } = await Promise.resolve().then(() => require("./pdf-theme-extractor-DmwyzMm3.js"));
+      return await extractPdfTheme(filePath);
+    } catch (err) {
+      console.error("PDF theme extraction error:", err);
+      return { error: err.message || String(err) };
+    }
+  });
+  electron.ipcMain.handle("theme:save-imported", async (_event, theme) => {
+    try {
+      const { saveImportedTheme } = await Promise.resolve().then(() => require("./imported-themes-5o_27UPs.js"));
+      return saveImportedTheme(theme);
+    } catch (err) {
+      console.error("Save imported theme error:", err);
+      return { error: err.message || String(err) };
+    }
+  });
+  electron.ipcMain.handle("theme:delete-imported", async (_event, themeName) => {
+    try {
+      const { deleteImportedTheme } = await Promise.resolve().then(() => require("./imported-themes-5o_27UPs.js"));
+      return deleteImportedTheme(themeName);
+    } catch (err) {
+      console.error("Delete imported theme error:", err);
+      return { error: err.message || String(err) };
+    }
+  });
+  electron.ipcMain.handle("theme:list-imported", async () => {
+    try {
+      const { getImportedThemeFiles } = await Promise.resolve().then(() => require("./imported-themes-5o_27UPs.js"));
+      return getImportedThemeFiles().map((f) => f.name);
+    } catch (err) {
+      console.error("List imported themes error:", err);
+      return [];
     }
   });
   electron.ipcMain.handle("resume:set-last-active", async (_event, id) => {

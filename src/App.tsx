@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { Sparkles } from "lucide-react"
 import { Sidebar } from "@/components/Sidebar"
 import { ChatMessage } from "@/components/ChatMessage"
 import { ChatInput } from "@/components/ChatInput"
@@ -15,7 +16,7 @@ import type { VisualTheme } from "@/types/visual-template"
 import { VisualThemePicker } from "@/components/VisualThemePicker"
 import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../themes/index"
 
-import { buildResumeContext, buildFirstMessagePrompt } from "@/adapter/distillation"
+import { buildResumeContext, buildFirstMessagePrompt, buildImportResumePrompt, buildRefinePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 
 const AVATAR_STORAGE_KEY = "user-avatar"
@@ -25,6 +26,91 @@ const log = (tag: string, ...args: any[]) => {
   const msg = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
   console.log(`[${tag}]`, ...args)
   window.electronAPI?.log?.(tag, msg).catch(() => {})
+}
+
+async function payloadToDataUrl(payload: ExtractedImagePayload, target: number = 400): Promise<string | null> {
+  try {
+    const rgb = base64ToUint8ClampedArray(payload.rgbBase64)
+    if (!rgb || rgb.length !== payload.width * payload.height * 3) return null
+
+    const scale = Math.min(1, target / Math.max(payload.width, payload.height))
+    const dstW = Math.max(1, Math.round(payload.width * scale))
+    const dstH = Math.max(1, Math.round(payload.height * scale))
+
+    const canvas = document.createElement("canvas")
+    canvas.width = dstW
+    canvas.height = dstH
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return null
+
+    const imgData = ctx.createImageData(dstW, dstH)
+    const scaleX = payload.width / dstW
+    const scaleY = payload.height / dstH
+
+    if (payload.hasAlpha && payload.smaskBase64) {
+      const smask = base64ToUint8ClampedArray(payload.smaskBase64)
+      if (smask && smask.length === payload.width * payload.height) {
+        for (let y = 0; y < dstH; y++) {
+          for (let x = 0; x < dstW; x++) {
+            const srcX = Math.floor(x * scaleX)
+            const srcY = Math.floor(y * scaleY)
+            const srcIdx = (srcY * payload.width + srcX) * 3
+            const maskIdx = (srcY * payload.width + srcX) * 1
+            const dstIdx = (y * dstW + x) * 4
+            imgData.data[dstIdx] = rgb[srcIdx]
+            imgData.data[dstIdx + 1] = rgb[srcIdx + 1]
+            imgData.data[dstIdx + 2] = rgb[srcIdx + 2]
+            imgData.data[dstIdx + 3] = smask[maskIdx]
+          }
+        }
+      } else {
+        copyRgbToCanvas(rgb, payload.width, payload.height, imgData, dstW, dstH, scaleX, scaleY)
+      }
+    } else {
+      copyRgbToCanvas(rgb, payload.width, payload.height, imgData, dstW, dstH, scaleX, scaleY)
+    }
+
+    ctx.putImageData(imgData, 0, 0)
+    return canvas.toDataURL("image/jpeg", 0.85)
+  } catch {
+    return null
+  }
+}
+
+function base64ToUint8ClampedArray(b64: string): Uint8ClampedArray | null {
+  try {
+    const binary = atob(b64)
+    const len = binary.length
+    const arr = new Uint8ClampedArray(len)
+    for (let i = 0; i < len; i++) arr[i] = binary.charCodeAt(i)
+    return arr
+  } catch {
+    return null
+  }
+}
+
+function copyRgbToCanvas(
+  rgb: Uint8ClampedArray,
+  srcW: number,
+  srcH: number,
+  imgData: ImageData,
+  dstW: number,
+  dstH: number,
+  scaleX: number,
+  scaleY: number,
+) {
+  for (let y = 0; y < dstH; y++) {
+    for (let x = 0; x < dstW; x++) {
+      const srcX = Math.floor(x * scaleX)
+      const srcY = Math.floor(y * scaleY)
+      const srcIdx = (srcY * srcW + srcX) * 3
+      const dstIdx = (y * dstW + x) * 4
+      imgData.data[dstIdx] = rgb[srcIdx]
+      imgData.data[dstIdx + 1] = rgb[srcIdx + 1]
+      imgData.data[dstIdx + 2] = rgb[srcIdx + 2]
+      imgData.data[dstIdx + 3] = 255
+    }
+  }
 }
 
 function getThemeAvatarDefault(theme: VisualTheme): boolean {
@@ -100,6 +186,8 @@ function App() {
     } catch { return null }
   })
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const importedFlowActive = useRef(false)
+  const [refineCount, setRefineCount] = useState(0)
 
   useEffect(() => {
     try {
@@ -118,6 +206,8 @@ function App() {
   resumeDataRef.current = resumeData
   const activeResumeIdRef = useRef(activeResumeId)
   activeResumeIdRef.current = activeResumeId
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
   const savedResumesRef = useRef(savedResumes)
   savedResumesRef.current = savedResumes
 
@@ -280,6 +370,8 @@ function App() {
     setLoading(false)
 
     const detected = tryDetectResumeJSON(content)
+    const wasImportedFlow = messagesRef.current.some((m) => m.id?.startsWith("user-import-"))
+
     if (detected) {
       setResumeData(detected)
 
@@ -289,7 +381,10 @@ function App() {
         if (tmpl) setTemplateData(tmpl)
         await window.electronAPI.updateResume(id, detected, tmpl || undefined)
 
-        const newContext = buildResumeContext(detected, detected.template)
+        const baseContext = buildResumeContext(detected, detected.template)
+        const newContext = wasImportedFlow
+          ? baseContext + "\n\n【系统提示】以上数据来自用户上传的 PDF 简历。请主动指出 1-2 个明显缺失或可疑的字段（如联系方式、关键数据），用友好语气询问用户补充。"
+          : baseContext
         await window.electronAPI.setChatContext(newContext)
 
         const list = await window.electronAPI.listResumes()
@@ -369,9 +464,31 @@ function App() {
   }, [handleAfterDone])
 
   const handleSend = useCallback(async (text: string) => {
+    importedFlowActive.current = false
     setMessages((prev) => [...prev, { role: "user", content: text }])
     await streamResponse(text, false)
   }, [streamResponse])
+
+  const handleRefineResume = useCallback(async () => {
+    const data = resumeDataRef.current
+    if (!data || loading) return
+    const next = refineCount + 1
+    setRefineCount(next)
+    if (next >= 4) {
+      toast("info", `已润色 ${next - 1} 次，建议直接导出 PDF 查看效果，避免无脑润色。`, {
+        duration: 5000,
+      })
+    }
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `user-refine-${next}-${Date.now()}`,
+        role: "user",
+        content: `请帮我润色（${next === 1 ? "首次" : `第 ${next} 次`}）`,
+      },
+    ])
+    await streamResponse(buildRefinePrompt(data, next), false)
+  }, [streamResponse, refineCount, loading])
 
   const sendFirstMessage = useCallback(async (prompt: string) => {
     await streamResponse(prompt, true)
@@ -412,29 +529,135 @@ function App() {
     triggerFirstMessage()
   }
 
-  const handleAnalyzeResume = async (file: File) => {
-    setMessages([])
-    setResumeData(null)
-
-    const isPdf = file.name.endsWith(".pdf")
-
-    if (isPdf) {
-      try {
-        const style = await window.electronAPI.extractPdfStyle(file.path)
-        if (style?.error) {
-          toast("error", `PDF 解析失败: ${style.error}`)
-          return
-        }
-        const stylePrompt = buildStyleAnalysisPrompt(style)
-        const allText = style.items?.map((i: any) => i.text).join("\n") || ""
-        handleSend(`这是一份 PDF 简历的提取内容。\n\n简历文本：\n${allText}\n\n另外，请分析它的视觉风格：\n${stylePrompt}\n\n请先分析内容并给出优化建议，然后分析视觉风格，输出 JSON 格式的风格参数。`)
-        toast("info", `已提取 ${style.items?.length || 0} 个文本项`)
-      } catch (err: any) {
-        toast("error", `PDF 提取失败: ${err.message}`)
-      }
-    } else {
+  const handleImportPdfResume = async (file: File) => {
+    const isPdf = file.name.toLowerCase().endsWith(".pdf")
+    if (!isPdf) {
       const text = await file.text()
       handleSend(`请分析以下简历内容并给出优化建议。\n\n简历内容：\n${text}`)
+      return
+    }
+
+    setLoading(true)
+    setMessages([])
+    setResumeData(null)
+    setStreamingContent("正在解析 PDF...")
+    importedFlowActive.current = true
+    setRefineCount(0)
+
+    try {
+      const filePath = window.electronAPI.getFilePath(file)
+      if (!filePath) {
+        toast("error", "无法获取文件路径，请重试")
+        setLoading(false)
+        setStreamingContent("")
+        importedFlowActive.current = false
+        return
+      }
+
+      const tmpl = await window.electronAPI.getTemplate("general")
+      if (!tmpl) {
+        toast("error", "general 模板加载失败")
+        setLoading(false)
+        setStreamingContent("")
+        importedFlowActive.current = false
+        return
+      }
+
+      const baseName = file.name.replace(/\.pdf$/i, "")
+      const emptyData: ResumeData = {
+        template: "general",
+        sections: { personal: { name: baseName } },
+      }
+      const entry = await window.electronAPI.saveResume(emptyData, tmpl)
+      setActiveResumeId(entry.id)
+      setTemplateData(tmpl)
+      setSavedResumes((prev) => [entry, ...prev.filter((r) => r.id !== entry.id)])
+
+      await window.electronAPI.switchResume(entry.id)
+      await window.electronAPI.setLastActiveResume(entry.id)
+
+      const parseResult = await window.electronAPI.parseResume(filePath)
+      if (parseResult?.error) {
+        setResumeData(emptyData)
+        await window.electronAPI.updateResume(entry.id, emptyData, tmpl)
+        toast(
+          "error",
+          `无法自动解析此 PDF：${parseResult.error}。请手动填写或拖入文本简历。`,
+          { duration: 6000 },
+        )
+        setLoading(false)
+        setStreamingContent("")
+        setMessages([
+          {
+            id: `user-import-${Date.now()}`,
+            role: "user",
+            content: `我上传了简历：${file.name}（自动解析失败）`,
+          },
+        ])
+        return
+      }
+
+      const parsed = parseResult as ResumeData
+      setResumeData(parsed)
+      await window.electronAPI.updateResume(entry.id, parsed, tmpl)
+      const list = await window.electronAPI.listResumes()
+      setSavedResumes(list)
+
+      const [avatarResult, themeResult] = await Promise.all([
+        window.electronAPI.extractPdfAvatarPayload(filePath).catch(() => null),
+        window.electronAPI.extractPdfTheme(filePath).catch(() => null),
+      ])
+
+      if (avatarResult && avatarResult.rgbBase64) {
+        const dataUrl = await payloadToDataUrl(avatarResult)
+        if (dataUrl) {
+          setUserAvatar(dataUrl)
+          localStorage.setItem(AVATAR_STORAGE_KEY, dataUrl)
+          localStorage.setItem(AVATAR_ENABLED_KEY, "1")
+          setAvatarEnabled(true)
+        }
+      }
+
+      if (themeResult && !(themeResult as any).error) {
+        try {
+          const saveRes = await window.electronAPI.saveImportedTheme(themeResult as any)
+          if (saveRes && !(saveRes as any).error) {
+            const themeObj = themeResult as DetectedTheme
+            const updated: VisualTheme = { ...(themeObj as any), isImported: true }
+            setVisualThemes((prev) => {
+              const filtered = prev.filter((t) => t.name !== updated.name)
+              return [...filtered, updated]
+            })
+            setCurrentVisualTheme(updated)
+            const pct = Math.round((themeObj.confidence ?? 0) * 100)
+            if (pct < 40) {
+              toast("info", `已近似复刻主题（${pct}% 复刻度）`)
+            } else {
+              toast("success", `已复刻原 PDF 主题（${pct}%）`)
+            }
+          }
+        } catch (err) {
+          console.error("Save imported theme error:", err)
+        }
+      }
+
+      const context = buildResumeContext(parsed, "general")
+      await window.electronAPI.setChatContext(context)
+
+      setMessages([
+        {
+          id: `user-import-${Date.now()}`,
+          role: "user",
+          content: `我上传了简历：${file.name}`,
+        },
+      ])
+      setLoading(false)
+      setStreamingContent("")
+    } catch (err: any) {
+      toast("error", `导入失败: ${err.message}`)
+      setLoading(false)
+      setStreamingContent("")
+      importedFlowActive.current = false
     }
   }
 
@@ -463,6 +686,26 @@ function App() {
 
   const handleVisualThemeChange = (theme: VisualTheme) => {
     setCurrentVisualTheme(theme)
+  }
+
+  const handleDeleteImportedTheme = async (themeName: string) => {
+    try {
+      const result = await window.electronAPI.deleteImportedTheme(themeName)
+      if (result && (result as any).error) {
+        toast("error", `删除失败: ${(result as any).error}`)
+        return
+      }
+      setVisualThemes((prev) => prev.filter((t) => t.name !== themeName))
+      if (currentVisualTheme.name === themeName) {
+        const fallback = getVisualTheme(DEFAULT_VISUAL_THEME)
+        setCurrentVisualTheme(fallback)
+        toast("info", `已切回默认主题 ${fallback.label}`)
+      } else {
+        toast("success", "已删除导入主题")
+      }
+    } catch (err: any) {
+      toast("error", `删除失败: ${err.message}`)
+    }
   }
 
   const handleRetryOpencode = async () => {
@@ -526,6 +769,7 @@ function App() {
                   themes={visualThemes}
                   currentTheme={currentVisualTheme}
                   onChange={handleVisualThemeChange}
+                  onDeleteImported={handleDeleteImportedTheme}
                   avatarEnabled={!!userAvatar && (avatarEnabled ?? getThemeAvatarDefault(currentVisualTheme))}
                   onAvatarEnabledChange={(enabled) => setAvatarEnabled(enabled)}
                   hasAvatar={!!userAvatar}
@@ -544,6 +788,16 @@ function App() {
                 </button>
               </>
             )}
+            {importedFlowActive.current && resumeData && !loading && (
+              <button
+                onClick={handleRefineResume}
+                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors flex items-center gap-1"
+                title="基于已有数据让 AI 润色"
+              >
+                <Sparkles className="w-3 h-3" />
+                AI 润色
+              </button>
+            )}
           </div>
         </header>
 
@@ -560,7 +814,7 @@ function App() {
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0">
               {!resumeData && (
-                <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleAnalyzeResume} />
+                <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleImportPdfResume} />
               )}
               <div className="flex-1 overflow-y-auto">
                 {messages.length === 0 && !loading && !resumeData ? (
@@ -588,7 +842,7 @@ function App() {
                   </div>
                 )}
               </div>
-              <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
+              <ChatInput onSend={handleSend} onImportPdf={handleImportPdfResume} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行，可拖入 PDF）"} />
             </div>
             <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
               {composedResumeData && templateData ? (

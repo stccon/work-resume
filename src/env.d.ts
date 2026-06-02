@@ -61,6 +61,13 @@ interface ElectronAPI {
   clearChatContext: () => Promise<void>
   switchResume: (resumeId: string) => Promise<void>
   extractPdfStyle: (filePath: string) => Promise<any>
+  parseResume: (filePath: string) => Promise<any>
+  extractPdfAvatarPayload: (filePath: string) => Promise<ExtractedImagePayload | null>
+  extractPdfTheme: (filePath: string) => Promise<DetectedTheme | { error: string }>
+  saveImportedTheme: (theme: Record<string, unknown>) => Promise<{ name: string; isNew: boolean } | { error: string }>
+  deleteImportedTheme: (themeName: string) => Promise<boolean | { error: string }>
+  listImportedThemes: () => Promise<string[]>
+  getFilePath: (file: File) => string
   opencodeStatus: () => Promise<{ connected: boolean }>
   opencodeRetry: () => Promise<{ connected: boolean }>
   setLastActiveResume: (id: string) => Promise<void>
@@ -70,6 +77,34 @@ interface ElectronAPI {
 
 interface File {
   path: string
+}
+
+interface ExtractedImagePayload {
+  width: number
+  height: number
+  hasAlpha: boolean
+  rgbBase64: string
+  smaskBase64: string | null
+}
+
+interface DetectedTheme {
+  name: string
+  label: string
+  description: string
+  layout: "single-column" | "two-column"
+  headerStyle: "centered" | "left" | "colored-bar"
+  sectionStyle: "underlined" | "colored-bg" | "minimal" | "card"
+  decorationStyle: "line" | "dot" | "none"
+  colors: Record<string, string>
+  fonts: { heading: string; body: string; mono: string }
+  typography: Record<string, string>
+  spacing: Record<string, string>
+  borderRadius: string
+  sidebarWidth: string
+  isImported: true
+  importedFrom: string
+  confidence: number
+  detectedAt: string
 }
 
 interface Window {

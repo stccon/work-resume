@@ -14,7 +14,7 @@ import v2ExecutiveSidebar from "./v2-executive-sidebar.json"
 import v2WarmEarth from "./v2-warm-earth.json"
 import v2TechBlueprint from "./v2-tech-blueprint.json"
 
-const themes: VisualTheme[] = [
+const builtInThemes: VisualTheme[] = [
   elegantBlue as VisualTheme,
   graphite as VisualTheme,
   emeraldSidebar as VisualTheme,
@@ -31,14 +31,30 @@ const themes: VisualTheme[] = [
   v2TechBlueprint as VisualTheme,
 ]
 
-const themeMap = new Map(themes.map((t) => [t.name, t]))
+const userImports = import.meta.glob<{ default: VisualTheme }>(
+  ["./imported-*.json", "./imported-*.json?imported"],
+  { eager: true },
+)
+const importedThemes: VisualTheme[] = Object.entries(userImports)
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([path, mod]) => {
+    const theme = (mod as any).default || mod
+    return { ...(theme as VisualTheme), isImported: true as const }
+  })
+
+const allThemes: VisualTheme[] = [...builtInThemes, ...importedThemes]
+const themeMap = new Map(allThemes.map((t) => [t.name, t]))
 
 export function getAllVisualThemes(): VisualTheme[] {
-  return themes
+  return allThemes
 }
 
 export function getVisualTheme(name: string): VisualTheme {
-  return themeMap.get(name) || themes[0]
+  return themeMap.get(name) || allThemes[0]
 }
 
-export const DEFAULT_VISUAL_THEME = themes[0].name
+export const DEFAULT_VISUAL_THEME = allThemes[0].name
+
+export function getImportedThemeNames(): string[] {
+  return importedThemes.map((t) => t.name)
+}

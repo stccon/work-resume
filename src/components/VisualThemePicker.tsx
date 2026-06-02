@@ -1,10 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react"
+import { Trash2 } from "lucide-react"
 import type { VisualTheme } from "@/types/visual-template"
+import { toast } from "./Toast"
 
 interface VisualThemePickerProps {
   themes: VisualTheme[]
   currentTheme: VisualTheme
   onChange: (theme: VisualTheme) => void
+  onDeleteImported?: (themeName: string) => void
   avatarEnabled: boolean
   onAvatarEnabledChange: (enabled: boolean) => void
   hasAvatar: boolean
@@ -25,6 +28,7 @@ export function VisualThemePicker({
   themes,
   currentTheme,
   onChange,
+  onDeleteImported,
   avatarEnabled,
   onAvatarEnabledChange,
   hasAvatar,
@@ -37,13 +41,27 @@ export function VisualThemePicker({
     setOpen(false)
   }, [onChange])
 
+  const handleDelete = useCallback((e: React.MouseEvent, theme: VisualTheme) => {
+    e.stopPropagation()
+    e.preventDefault()
+    if (!onDeleteImported) return
+    const ok = window.confirm(`确定删除导入的主题"${theme.label}"？此操作无法撤销。`)
+    if (!ok) return
+    onDeleteImported(theme.name)
+  }, [onDeleteImported])
+
   const grouped = useMemo(() => {
-    const v1 = themes.filter((t) => (t.series || "v1") === "v1")
-    const v2 = themes.filter((t) => t.series === "v2")
-    return [
+    const imported = themes.filter((t) => t.isImported)
+    const v1 = themes.filter((t) => !t.isImported && (t.series || "v1") === "v1")
+    const v2 = themes.filter((t) => !t.isImported && t.series === "v2")
+    const groups = [
       { key: "v2", label: SERIES_LABEL.v2, items: v2 },
       { key: "v1", label: SERIES_LABEL.v1, items: v1 },
-    ].filter((g) => g.items.length > 0)
+    ]
+    if (imported.length > 0) {
+      groups.unshift({ key: "imported", label: "导入主题", items: imported })
+    }
+    return groups.filter((g) => g.items.length > 0)
   }, [themes])
 
   return (
@@ -80,7 +98,7 @@ export function VisualThemePicker({
                   <button
                     key={theme.name}
                     onClick={() => handleSelect(theme)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs text-left hover:bg-accent transition-colors ${
+                    className={`group w-full flex items-center gap-3 px-3 py-2.5 text-xs text-left hover:bg-accent transition-colors ${
                       theme.name === currentTheme.name ? "bg-accent font-medium" : ""
                     }`}
                   >
@@ -102,6 +120,11 @@ export function VisualThemePicker({
                             {FAMILY_LABEL[theme.family] || theme.family}
                           </span>
                         )}
+                        {theme.isImported && theme.confidence !== undefined && (
+                          <span className="text-[9px] px-1 py-px rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 shrink-0">
+                            {Math.round(theme.confidence * 100)}%
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-muted-foreground truncate mt-0.5">
                         {theme.description}
@@ -111,6 +134,15 @@ export function VisualThemePicker({
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent text-muted-foreground shrink-0">
                         双栏
                       </span>
+                    )}
+                    {theme.isImported && onDeleteImported && (
+                      <button
+                        onClick={(e) => handleDelete(e, theme)}
+                        title="删除导入主题"
+                        className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     )}
                   </button>
                 ))}

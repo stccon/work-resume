@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron"
+import { contextBridge, ipcRenderer, webUtils } from "electron"
 
 contextBridge.exposeInMainWorld("electronAPI", {
   sendMessage: (text: string) => ipcRenderer.invoke("chat:send", text) as Promise<{ content: string; error: any; isQuotaError: boolean }>,
@@ -32,6 +32,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   clearChatContext: () => ipcRenderer.invoke("chat:clear-context"),
   switchResume: (resumeId: string) => ipcRenderer.invoke("chat:switch-resume", resumeId),
   extractPdfStyle: (filePath: string) => ipcRenderer.invoke("pdf:extract-style", filePath),
+  parseResume: (filePath: string) => ipcRenderer.invoke("pdf:parse-resume", filePath),
+  extractPdfAvatarPayload: (filePath: string) => ipcRenderer.invoke("pdf:extract-avatar-payload", filePath),
+  getFilePath: (file: File) => webUtils.getPathForFile(file),
+  extractPdfTheme: (filePath: string) => ipcRenderer.invoke("pdf:extract-theme", filePath),
+  saveImportedTheme: (theme: Record<string, unknown>) => ipcRenderer.invoke("theme:save-imported", theme),
+  deleteImportedTheme: (themeName: string) => ipcRenderer.invoke("theme:delete-imported", themeName),
+  listImportedThemes: () => ipcRenderer.invoke("theme:list-imported") as Promise<string[]>,
   setLastActiveResume: (id: string) => ipcRenderer.invoke("resume:set-last-active", id),
   getLastActiveResume: () => ipcRenderer.invoke("resume:get-last-active") as Promise<string | null>,
   log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),

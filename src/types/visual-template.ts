@@ -76,6 +76,10 @@ export interface VisualTheme {
   }
   sidebarWidth?: string
   borderRadius: string
+  isImported?: true
+  importedFrom?: string
+  confidence?: number
+  detectedAt?: string
   v2Config?: {
     headerVariant: "minimal" | "split" | "magazine"
     sectionTitleRule: "short-line" | "full-line" | "double-line" | "boxed"

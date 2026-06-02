@@ -96,3 +96,76 @@ ${existingInfo}
 - **不要在 JSON 中输出 personal.avatar 字段**。头像由用户在工具栏右侧的头像按钮独立上传，与简历数据分离。
 - 如果用户在对话中提到"上传了头像"/"换了照片"等，**不要**修改 JSON 中的 personal 字段；只需简短确认即可`
 }
+
+export interface ImportResumeField {
+  id: string
+  label: string
+  section: string
+}
+
+export function buildImportResumePrompt(
+  pdfText: string,
+  templateFields: ImportResumeField[],
+  pdfFileName: string,
+): string {
+  const fieldsList = templateFields
+    .map((f) => `  - ${f.section}.${f.id}（${f.label}）`)
+    .join("\n")
+
+  const truncated = pdfText.length > 6000 ? pdfText.slice(0, 6000) + "\n...（已截断）" : pdfText
+
+  return `用户上传了一份 PDF 简历（${pdfFileName}），请仔细阅读后按以下结构输出严格 JSON。
+
+【PDF 简历原文】
+\`\`\`
+${truncated}
+\`\`\`
+
+【可用字段】
+${fieldsList}
+
+【命名规则】
+- 单条字段：直接用 id 命名，如 \`personal.name\` → \`"name": "..."\`
+- 多条记录（工作经历、教育背景、项目经验等）：用 \`entry0_xxx\` / \`entry1_xxx\` / \`entry2_xxx\` 命名，如 \`"entry0_company": "...", "entry0_position": "...", "entry1_company": "...", "entry1_position": "..."\`
+
+【输出要求】
+- 在代码块中输出 JSON：\`\`\`json ... \`\`\`
+- 所有值必须是字符串。多行内容用 \`\\n\` 分隔
+- 不要输出 personal.avatar 字段
+- 提取不到则填空字符串 ""
+- 日期尽量保留原格式（如 "2023.06"、"2020-2022"、"2018.09 - 2022.06"）
+- 在 JSON 之后，用一句话告诉用户解析已完成、并指出 1-2 个缺失/可疑字段等待用户确认
+`
+}
+
+export function buildRefinePrompt(resume: ResumeData, iteration: number = 1): string {
+  const focusMap: Record<number, string> = {
+    1: `1. 「工作成就」改写为动词开头 + 量化指标
+2. 「个人简介」若空或过短，根据工作经历写 80-150 字
+3. 「技术栈」归类清晰`,
+    2: `1. 检查日期/职位/公司名是否有拼写错误
+2. 补充可能被忽略的项目细节
+3. 重新优化「个人简介」措辞`,
+    3: `1. 整体语气一致性（避免一会正式一会口语）
+2. 中英文标点统一
+3. 字段间数据是否自洽（如工作年限 vs 教育时间）`,
+  }
+  const fallback = `1. 砍掉冗余表述
+2. 突出亮点关键词
+3. 让 HR 3 秒内 get 核心卖点`
+  const focus = focusMap[iteration] ?? `${focusMap[3]}\n${fallback}\n4. 用户已润色多次，本次侧重差异化亮点`
+
+  return `用户已有简历数据（这是第 ${iteration} 次润色）：
+\`\`\`json
+${JSON.stringify(resume.sections, null, 2)}
+\`\`\`
+
+【本轮重点】
+${focus}
+
+【约束】
+- 保留所有已有数据，不要清空字段
+- 只输出修改/补充的字段，未改动的不重复
+- 输出完整 JSON（同 buildFirstMessagePrompt 的格式）
+- JSON 之后用 1 句话说明本轮改了什么`
+}

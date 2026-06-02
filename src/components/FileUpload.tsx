@@ -90,7 +90,7 @@ export function FileUpload({ onFileSelected, onAnalyze }: FileUploadProps) {
               disabled={analyzing}
               className="px-3 py-1.5 text-xs rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : "分析"}
+              {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : "导入并解析"}
             </button>
             <button onClick={handleClear} className="p-1 rounded-md hover:bg-background transition-colors">
               <X className="w-4 h-4" />
