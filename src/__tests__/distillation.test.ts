@@ -49,6 +49,14 @@ describe("buildResumeContext", () => {
     expect(result).toContain("教育背景")
   })
 
+  it("should include new section semantics for highlights/projects/awards", () => {
+    const result = buildResumeContext(null)
+    expect(result).toContain("个人优势")
+    expect(result).toContain("项目经历")
+    expect(result).toContain("荣誉奖项")
+    expect(result).toContain("section 列表与语义")
+  })
+
   it("should include existing resume data when sections exist", () => {
     const resume: ResumeData = {
       template: "general",

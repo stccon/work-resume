@@ -8,22 +8,31 @@
       "label": "个人信息",
       "fields": [
         { "id": "name", "label": "姓名", "type": "text", "required": true, "order": 1, "prompt": "请问你的姓名是？" },
-        { "id": "email", "label": "邮箱", "type": "text", "required": true, "order": 2, "prompt": "你的邮箱地址是？" },
-        { "id": "phone", "label": "电话", "type": "text", "required": true, "order": 3, "prompt": "你的手机号码是？" },
-        { "id": "title", "label": "求职意向", "type": "text", "required": true, "order": 4, "prompt": "你想应聘什么职位？" },
-        { "id": "github", "label": "GitHub/作品链接", "type": "text", "required": false, "order": 5, "prompt": "有 GitHub 或作品链接吗？" }
+        { "id": "title", "label": "求职意向", "type": "text", "required": true, "order": 2, "prompt": "你想应聘什么职位？" },
+        { "id": "email", "label": "邮箱", "type": "text", "required": true, "order": 3, "prompt": "你的邮箱地址是？" },
+        { "id": "phone", "label": "电话", "type": "text", "required": true, "order": 4, "prompt": "你的手机号码是？" },
+        { "id": "location", "label": "所在城市", "type": "text", "required": false, "order": 5, "prompt": "你现在所在的城市是？（例如：北京、上海、深圳）" },
+        { "id": "linkedin", "label": "LinkedIn", "type": "text", "required": false, "order": 6, "prompt": "有 LinkedIn 个人主页吗？（可选）" },
+        { "id": "github", "label": "GitHub/作品链接", "type": "text", "required": false, "order": 7, "prompt": "有 GitHub 或个人作品集链接吗？（可选）" }
       ]
     },
     {
       "id": "summary",
       "label": "个人简介",
       "fields": [
-        { "id": "summary", "label": "简介", "type": "textarea", "required": true, "order": 1, "prompt": "请介绍一下你自己，包括工作经验和核心优势", "followUpPrompt": "能再详细说说你的专业背景吗？" }
+        { "id": "summary", "label": "个人简介", "type": "textarea", "required": true, "order": 1, "prompt": "请用 80-150 字介绍一下你自己，包括工作年限、核心技能和职业定位", "followUpPrompt": "能再具体说说你的差异化优势吗？" }
+      ]
+    },
+    {
+      "id": "highlights",
+      "label": "个人优势",
+      "fields": [
+        { "id": "highlights", "label": "个人优势", "type": "textarea", "required": false, "order": 1, "prompt": "用 3-5 条要点列出你的核心竞争力和差异化亮点（每条一行）。例如：\n- 8 年后端架构经验，主导过日均 10 亿请求的系统\n- 熟悉云原生技术栈（K8s/Service Mesh）\n- 有从 0 到 1 搭建团队和流程的经验", "followUpPrompt": "还有哪些独特的优势？比如行业资源、跨文化沟通、专利论文等" }
       ]
     },
     {
       "id": "skills",
-      "label": "技能",
+      "label": "专业技能",
       "fields": [
         { "id": "skills", "label": "技能概述", "type": "skills", "required": true, "order": 1, "prompt": "你掌握哪些技能？比如编程语言、工具、软技能等", "followUpPrompt": "还有别的技能吗？" },
         { "id": "languages", "label": "编程语言", "type": "text", "required": false, "order": 2, "prompt": "你会哪些编程语言？" },
@@ -38,30 +47,56 @@
       "fields": [
         { "id": "company", "label": "公司名称", "type": "text", "required": true, "order": 1, "prompt": "你最近在哪家公司工作？" },
         { "id": "position", "label": "职位", "type": "text", "required": true, "order": 2, "prompt": "你的职位是什么？" },
-        { "id": "startDate", "label": "开始时间", "type": "date", "required": true, "order": 3, "prompt": "什么时候开始的？" },
-        { "id": "endDate", "label": "结束时间", "type": "date", "required": false, "order": 4, "prompt": "什么时候结束的？（如果还在职可以跳过）" },
-        { "id": "achievements", "label": "工作成就", "type": "textarea", "required": true, "order": 5, "prompt": "在这家公司你取得了哪些成就？", "followUpPrompt": "还有其他的成就或项目经验吗？" },
-        { "id": "techStack", "label": "技术栈", "type": "text", "required": false, "order": 6, "prompt": "在那里用了什么技术栈？" },
-        { "id": "projects", "label": "项目经验", "type": "textarea", "required": false, "order": 7, "prompt": "做过哪些项目？你在其中的角色和贡献是什么？" },
-        { "id": "teamSize", "label": "团队规模", "type": "text", "required": false, "order": 8, "prompt": "你管理多大的团队？" },
-        { "id": "responsibilities", "label": "管理职责", "type": "textarea", "required": false, "order": 9, "prompt": "你的主要管理职责是什么？" }
+        { "id": "location", "label": "工作地点", "type": "text", "required": false, "order": 3, "prompt": "工作所在的城市？" },
+        { "id": "startDate", "label": "开始时间", "type": "date", "required": true, "order": 4, "prompt": "什么时候开始工作的？" },
+        { "id": "endDate", "label": "结束时间", "type": "date", "required": false, "order": 5, "prompt": "什么时候结束的？（如果还在职可以跳过）" },
+        { "id": "achievements", "label": "工作成就", "type": "textarea", "required": true, "order": 6, "prompt": "在这家公司你取得了哪些可量化的工作成就？（用动词开头+数据指标）", "followUpPrompt": "还有其他成就或项目经验吗？" },
+        { "id": "techStack", "label": "技术栈", "type": "text", "required": false, "order": 7, "prompt": "在那里用了什么技术栈？" },
+        { "id": "teamSize", "label": "团队规模", "type": "text", "required": false, "order": 8, "prompt": "你管理或所在的团队规模？（例如：5 人 / 10+ 人）" },
+        { "id": "responsibilities", "label": "管理职责", "type": "textarea", "required": false, "order": 9, "prompt": "如果担任管理岗，你的管理职责是什么？（招聘、绩效、跨团队协作等）" }
+      ]
+    },
+    {
+      "id": "projects",
+      "label": "项目经历",
+      "fields": [
+        { "id": "name", "label": "项目名称", "type": "text", "required": true, "order": 1, "prompt": "项目名称是什么？（如：电商订单系统重构、推荐算法升级）" },
+        { "id": "role", "label": "担任角色", "type": "text", "required": false, "order": 2, "prompt": "你在项目中的角色？（如：技术负责人 / 后端开发 / 全栈）" },
+        { "id": "startDate", "label": "开始时间", "type": "date", "required": false, "order": 3, "prompt": "项目开始时间" },
+        { "id": "endDate", "label": "结束时间", "type": "date", "required": false, "order": 4, "prompt": "项目结束时间（进行中可写至今）" },
+        { "id": "description", "label": "项目描述", "type": "textarea", "required": true, "order": 5, "prompt": "简要描述项目背景、目标、你的具体贡献（建议 3-5 条要点）" },
+        { "id": "techStack", "label": "技术栈", "type": "text", "required": false, "order": 6, "prompt": "项目用到了哪些技术？" },
+        { "id": "link", "label": "项目链接", "type": "text", "required": false, "order": 7, "prompt": "有 Demo、GitHub 或产品链接吗？（可选）" },
+        { "id": "highlights", "label": "项目亮点", "type": "textarea", "required": false, "order": 8, "prompt": "项目的可量化成果是什么？（如：性能提升 50%、日活增长 3 倍、节省 100 万/年）" }
       ]
     },
     {
       "id": "education",
       "label": "教育背景",
       "fields": [
-        { "id": "school", "label": "学校", "type": "text", "required": true, "order": 1, "prompt": "你的最高学历是什么？哪个学校？" },
+        { "id": "school", "label": "学校", "type": "text", "required": true, "order": 1, "prompt": "你的最高学历是哪所学校？" },
         { "id": "major", "label": "专业", "type": "text", "required": true, "order": 2, "prompt": "你学的什么专业？" },
-        { "id": "degree", "label": "学位", "type": "text", "required": true, "order": 3, "prompt": "是什么学位？" },
-        { "id": "gradYear", "label": "毕业年份", "type": "date", "required": true, "order": 4, "prompt": "哪年毕业的？" }
+        { "id": "degree", "label": "学位", "type": "text", "required": true, "order": 3, "prompt": "是什么学位？（如：本科 / 硕士 / 博士）" },
+        { "id": "startDate", "label": "入学时间", "type": "date", "required": false, "order": 4, "prompt": "什么时候入学？（如：2018.09）" },
+        { "id": "endDate", "label": "毕业时间", "type": "date", "required": true, "order": 5, "prompt": "什么时候毕业？（如：2022.06）" },
+        { "id": "gpa", "label": "GPA/排名", "type": "text", "required": false, "order": 6, "prompt": "GPA 或专业排名是多少？（如 GPA 3.8/4.0 或排名前 10%，应届生建议填写）" },
+        { "id": "honors", "label": "荣誉奖项", "type": "textarea", "required": false, "order": 7, "prompt": "在校期间获得过哪些荣誉？（如：国家奖学金、ACM 区域赛金牌）" },
+        { "id": "coursework", "label": "核心课程", "type": "textarea", "required": false, "order": 8, "prompt": "与目标岗位相关的核心课程（如：机器学习、分布式系统）" },
+        { "id": "location", "label": "学校地点", "type": "text", "required": false, "order": 9, "prompt": "学校所在城市？" }
       ]
     },
     {
       "id": "certifications",
       "label": "证书与培训",
       "fields": [
-        { "id": "certifications", "label": "证书", "type": "textarea", "required": false, "order": 1, "prompt": "有哪些相关的证书或培训经历？" }
+        { "id": "certifications", "label": "证书", "type": "textarea", "required": false, "order": 1, "prompt": "有哪些相关的证书或培训经历？（如：AWS Solutions Architect Professional，2023）" }
+      ]
+    },
+    {
+      "id": "awards",
+      "label": "荣誉奖项",
+      "fields": [
+        { "id": "awards", "label": "奖项", "type": "textarea", "required": false, "order": 1, "prompt": "重要的工作或社会荣誉奖项（每行一条）。例如：\n- 2024 年 Q1 公司明星员工\n- 2023 年公司专利贡献奖（排名第 1）" }
       ]
     }
   ]

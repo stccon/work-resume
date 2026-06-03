@@ -1,6 +1,6 @@
-import { FileText, Settings, Plus, Trash2 } from "lucide-react"
+import { useState, useRef, DragEvent } from "react"
+import { FileText, Settings, Plus, Trash2, FileUp } from "lucide-react"
 import { cn } from "@/lib/utils"
-
 
 interface SidebarProps {
   onOpenSettings: () => void
@@ -9,6 +9,7 @@ interface SidebarProps {
   onSelectResume: (id: string) => void
   onDeleteResume: (id: string) => void
   onCreateResume: () => void
+  onImportPdf: (file: File) => void
 }
 
 export function Sidebar({
@@ -18,10 +19,51 @@ export function Sidebar({
   onSelectResume,
   onDeleteResume,
   onCreateResume,
+  onImportPdf,
 }: SidebarProps) {
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) onImportPdf(f)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleDragOver = (e: DragEvent) => {
+    e.preventDefault()
+    setDragOver(true)
+  }
+
+  const handleDragLeave = (e: DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+  }
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f && f.name.toLowerCase().endsWith(".pdf")) {
+      onImportPdf(f)
+    }
+  }
+
   return (
-    <aside className="w-64 flex flex-col border-r border-border bg-sidebar">
-      <div className="p-3 border-b border-border">
+    <aside
+      className={cn(
+        "w-64 flex flex-col border-r border-border bg-sidebar transition-colors",
+        dragOver && "bg-primary/5 ring-2 ring-primary ring-inset",
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="p-3 border-b border-border space-y-2">
         <button
           onClick={onCreateResume}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
@@ -29,6 +71,26 @@ export function Sidebar({
           <Plus className="w-4 h-4" />
           <span>创建简历</span>
         </button>
+        <button
+          onClick={handleImportClick}
+          title="选择简历文件导入"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-accent transition-colors"
+        >
+          <FileUp className="w-4 h-4" />
+          <span>导入简历</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+        {dragOver && (
+          <p className="text-[10px] text-center text-primary font-medium">
+            松开以导入简历
+          </p>
+        )}
       </div>
 
       {savedResumes.length > 0 && (
@@ -71,7 +133,8 @@ export function Sidebar({
       {savedResumes.length === 0 && (
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-xs text-muted-foreground text-center">
-            还没有简历<br />点击上方按钮创建一份吧
+            还没有简历<br />
+            点击创建或导入
           </p>
         </div>
       )}

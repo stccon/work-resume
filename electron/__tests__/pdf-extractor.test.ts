@@ -5,6 +5,7 @@ import {
   detectColumnBreaks,
   assignColumn,
   reconstructLinesPerPage,
+  KNOWN_SECTION_TITLES,
   type ExtractedTextItem,
   type ExtractedLine,
 } from "../pdf-extractor"
@@ -213,5 +214,66 @@ describe("reconstructLinesPerPage", () => {
     expect(texts[0]).toBe("L0")
     expect(texts[4]).toBe("L4")
     expect(texts[5]).toBe("R0")
+  })
+})
+
+describe("degraded-mode signal propagation in reconstructLines", () => {
+  it("fills isCommonFont=false for non-common fontName when commonFontName provided", () => {
+    const items = [
+      mk("工作经历", 10, 100, { fontName: "g_d0_f5", fontSize: 0 }),
+      mk("这是正文内容", 10, 80, { fontName: "g_d0_f1", fontSize: 0 }),
+    ]
+    const lines = reconstructLines(items, 2, 40, "g_d0_f1")
+    expect(lines[0].fontName).toBe("g_d0_f5")
+    expect(lines[0].isCommonFont).toBe(false)
+    expect(lines[1].isCommonFont).toBe(true)
+  })
+
+  it("fills yGapBefore for consecutive same-page lines and 0 on page change", () => {
+    const items = [
+      mk("A", 10, 200, { pageIndex: 0 }),
+      mk("B", 10, 180, { pageIndex: 0 }),
+      mk("C", 10, 160, { pageIndex: 0 }),
+      mk("P2", 10, 200, { pageIndex: 1 }),
+    ]
+    const lines = reconstructLines(items)
+    expect(lines[0].yGapBefore).toBe(0)
+    expect(lines[1].yGapBefore).toBe(20)
+    expect(lines[2].yGapBefore).toBe(20)
+    expect(lines[3].yGapBefore).toBe(0)
+  })
+
+  it("marks isShortLine=true for short lines without trailing punctuation", () => {
+    const items = [
+      mk("工作经历", 10, 200),
+      mk("这一行比较长，包含很多内容", 10, 180),
+      mk("短行。", 10, 160),
+      mk("Foo!", 10, 140),
+    ]
+    const lines = reconstructLines(items)
+    expect(lines[0].isShortLine).toBe(true)
+    expect(lines[1].isShortLine).toBe(false)
+    expect(lines[2].isShortLine).toBe(false)
+    expect(lines[3].isShortLine).toBe(false)
+  })
+})
+
+describe("KNOWN_SECTION_TITLES", () => {
+  it("contains core Chinese section titles", () => {
+    expect(KNOWN_SECTION_TITLES.has("工作经历")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("教育背景")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("项目经历")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("技能")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("个人优势")).toBe(true)
+  })
+  it("contains core English section titles", () => {
+    expect(KNOWN_SECTION_TITLES.has("Education")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("Work Experience")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("Projects")).toBe(true)
+    expect(KNOWN_SECTION_TITLES.has("Skills")).toBe(true)
+  })
+  it("does not contain random text", () => {
+    expect(KNOWN_SECTION_TITLES.has("我是一名软件工程师")).toBe(false)
+    expect(KNOWN_SECTION_TITLES.has("")).toBe(false)
   })
 })

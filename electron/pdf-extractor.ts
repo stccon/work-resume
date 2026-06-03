@@ -25,6 +25,9 @@ export interface ExtractedStyleInfo {
   items: ExtractedTextItem[]
   fonts: string[]
   fontSizes: number[]
+  degraded?: boolean
+  fontFrequency?: Record<string, number>
+  commonFontName?: string
 }
 
 export interface ExtractedLine {
@@ -35,6 +38,9 @@ export interface ExtractedLine {
   fontName: string
   isBold: boolean
   pageIndex: number
+  isCommonFont?: boolean
+  yGapBefore?: number
+  isShortLine?: boolean
 }
 
 export interface ExtractedLayout {
@@ -43,6 +49,9 @@ export interface ExtractedLayout {
   pageWidth: number
   pageHeight: number
   columnBreaks?: number[]
+  degraded?: boolean
+  commonFontName?: string
+  rawLines?: ExtractedLine[]
 }
 
 export async function extractPdfStyle(filePath: string): Promise<ExtractedStyleInfo> {
@@ -85,6 +94,25 @@ export async function extractPdfStyle(filePath: string): Promise<ExtractedStyleI
     }
   }
 
+  const fontFrequency: Record<string, number> = {}
+  for (const it of allItems) {
+    if (!it.text) continue
+    fontFrequency[it.fontName] = (fontFrequency[it.fontName] || 0) + it.text.length
+  }
+  let commonFontName = ""
+  let maxCount = 0
+  for (const [name, count] of Object.entries(fontFrequency)) {
+    if (count > maxCount) {
+      maxCount = count
+      commonFontName = name
+    }
+  }
+
+  const allFontSizeZero = allItems.length > 0 && allItems.every((i) => i.fontSize === 0)
+  const allFontsAnonymous =
+    allItems.length > 0 && allItems.every((i) => /^g_d\d+_f\d+$/.test(i.fontName))
+  const degraded = allFontSizeZero || allFontsAnonymous
+
   return {
     pageCount: doc.numPages,
     pageWidth,
@@ -92,6 +120,9 @@ export async function extractPdfStyle(filePath: string): Promise<ExtractedStyleI
     items: allItems,
     fonts: Array.from(fontsSet),
     fontSizes: Array.from(fontSizesSet).sort((a, b) => a - b),
+    degraded,
+    fontFrequency,
+    commonFontName,
   }
 }
 
@@ -99,6 +130,53 @@ export function isBoldFont(fontName: string): boolean {
   if (!fontName) return false
   return /bold|black|heavy|-b-|\.bd/i.test(fontName)
 }
+
+export const KNOWN_SECTION_TITLES: ReadonlySet<string> = new Set<string>([
+  "教育经历",
+  "教育背景",
+  "教育情况",
+  "教育信息",
+  "学历",
+  "工作经历",
+  "工作经验",
+  "工作概要",
+  "工作历史",
+  "从业经历",
+  "项目经历",
+  "项目经验",
+  "项目实践",
+  "代表项目",
+  "个人项目",
+  "专业技能",
+  "技能",
+  "技术栈",
+  "核心能力",
+  "个人简介",
+  "自我介绍",
+  "个人优势",
+  "核心竞争力",
+  "个人特长",
+  "自我评价",
+  "证书",
+  "资格证书",
+  "认证",
+  "获奖经历",
+  "荣誉奖项",
+  "奖项",
+  "实习经历",
+  "实习经验",
+  "Education",
+  "Work Experience",
+  "Experience",
+  "Projects",
+  "Skills",
+  "Summary",
+  "Highlights",
+  "Certifications",
+  "Awards",
+  "Honors",
+  "Internship",
+])
 
 const Y_TOLERANCE = 2
 const X_GAP_THRESHOLD = 40
@@ -109,6 +187,7 @@ export function reconstructLines(
   items: ExtractedTextItem[],
   yTolerance: number = Y_TOLERANCE,
   xGapThreshold: number = X_GAP_THRESHOLD,
+  commonFontName?: string,
 ): ExtractedLine[] {
   if (items.length === 0) return []
   const sorted = [...items].sort((a, b) => {
@@ -159,17 +238,32 @@ export function reconstructLines(
       if (!text) continue
       const maxFontSize = cluster.reduce((m, it) => Math.max(m, it.fontSize), 0)
       const anyBold = cluster.some((it) => isBoldFont(it.fontName))
+      const primaryFontName = cluster[0].fontName
+      const isCommonFont = commonFontName ? primaryFontName === commonFontName : undefined
+      const isShortLine = text.length <= 12 && !/[。！？，、；：.!?;:,]$/.test(text)
       lines.push({
         text,
         x: cluster[0].x,
         y: cluster[0].y,
         fontSize: maxFontSize,
-        fontName: cluster[0].fontName,
+        fontName: primaryFontName,
         isBold: anyBold,
         pageIndex: cluster[0].pageIndex,
+        isCommonFont,
+        isShortLine,
       })
     }
   }
+  for (let i = 1; i < lines.length; i++) {
+    const prev = lines[i - 1]
+    const cur = lines[i]
+    if (cur.pageIndex === prev.pageIndex) {
+      cur.yGapBefore = Math.abs(cur.y - prev.y)
+    } else {
+      cur.yGapBefore = 0
+    }
+  }
+  if (lines.length > 0) lines[0].yGapBefore = 0
   return lines
 }
 
@@ -231,6 +325,7 @@ export function assignColumn(lines: ExtractedLine[], breaks: number[]): Extracte
 export function reconstructLinesPerPage(
   items: ExtractedTextItem[],
   yTolerance: number = Y_TOLERANCE,
+  commonFontName?: string,
 ): ExtractedLine[][] {
   const pageMap = new Map<number, ExtractedTextItem[]>()
   for (const item of items) {
@@ -242,7 +337,7 @@ export function reconstructLinesPerPage(
   const pageIndices = Array.from(pageMap.keys()).sort((a, b) => a - b)
   for (const idx of pageIndices) {
     const pageItems = pageMap.get(idx) || []
-    const lines = reconstructLines(pageItems, yTolerance)
+    const lines = reconstructLines(pageItems, yTolerance, X_GAP_THRESHOLD, commonFontName)
     const breaks = detectColumnBreaks(lines)
     if (breaks.length > 0) {
       const columns = assignColumn(lines, breaks)
@@ -262,14 +357,18 @@ export function reconstructLinesPerPage(
 
 export async function extractPdfLayout(filePath: string): Promise<ExtractedLayout> {
   const style = await extractPdfStyle(filePath)
-  const pages = reconstructLinesPerPage(style.items)
+  const pages = reconstructLinesPerPage(style.items, Y_TOLERANCE, style.commonFontName)
   const allLines = pages.flat()
   const breaks = detectColumnBreaks(allLines)
+  const rawLines = reconstructLines(style.items, Y_TOLERANCE, X_GAP_THRESHOLD, style.commonFontName)
   return {
     pages,
     pageCount: style.pageCount,
     pageWidth: style.pageWidth,
     pageHeight: style.pageHeight,
     columnBreaks: breaks.length > 0 ? breaks : undefined,
+    degraded: style.degraded,
+    commonFontName: style.commonFontName,
+    rawLines,
   }
 }

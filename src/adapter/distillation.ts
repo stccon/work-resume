@@ -65,6 +65,17 @@ ${name}
 模板字段：
 ${fields}
 
+【section 列表与语义】
+- personal：个人信息（含姓名、求职意向、邮箱、电话、所在城市、LinkedIn、GitHub/作品集）
+- summary：个人简介（80-150 字）
+- highlights：个人优势/核心竞争力（3-5 条要点）
+- skills：专业技能（技能概述 + 编程语言/框架/数据库/云服务）
+- experience：工作经历（多条 entry：company, position, location, startDate, endDate, achievements, techStack, teamSize, responsibilities）
+- projects：项目经历（多条 entry，与 experience 并列，name, role, startDate, endDate, description, techStack, link, highlights）
+- education：教育背景（多条 entry：school, major, degree, startDate, endDate, gpa, honors, coursework, location）
+- certifications：证书与培训
+- awards：荣誉奖项
+
 ## 输出格式要求（每次回复必须遵守）
 
 只要用户提供了新的简历信息、修改了已有信息（哪怕只改一个字段）、或要求生成简历，你**必须**在回复末尾输出完整的最新简历 JSON。格式如下：
@@ -75,9 +86,13 @@ ${fields}
   "sections": {
     "personal": { "name": "...", "email": "...", ... },
     "summary": { "summary": "..." },
+    "highlights": { "highlights": "..." },
     "skills": { ... },
     "experience": { ... },
-    "education": { ... }
+    "projects": { ... },
+    "education": { ... },
+    "certifications": { ... },
+    "awards": { ... }
   }
 }
 \`\`\`
@@ -126,7 +141,18 @@ ${fieldsList}
 
 【命名规则】
 - 单条字段：直接用 id 命名，如 \`personal.name\` → \`"name": "..."\`
-- 多条记录（工作经历、教育背景、项目经验等）：用 \`entry0_xxx\` / \`entry1_xxx\` / \`entry2_xxx\` 命名，如 \`"entry0_company": "...", "entry0_position": "...", "entry1_company": "...", "entry1_position": "..."\`
+- 多条记录（工作经历、项目经验、教育背景等）：用 \`entry0_xxx\` / \`entry1_xxx\` / \`entry2_xxx\` 命名，如 \`"entry0_company": "...", "entry0_position": "...", "entry1_company": "...", "entry1_position": "..."\`
+
+【section 语义说明】
+- personal：单条，含姓名、求职意向、邮箱、电话、所在城市、LinkedIn、GitHub/作品集
+- summary：单条，80-150 字的个人简介
+- highlights：单条，个人优势/核心竞争力（建议 3-5 条，每条一行）
+- skills：单条，含技能概述、编程语言、框架/工具、数据库、云服务
+- experience：多条 entry，每条含公司、职位、工作地点、起止时间、工作成就、技术栈、团队规模、管理职责
+- projects：多条 entry，每条含项目名称、担任角色、起止时间、项目描述、技术栈、项目链接、项目亮点（这是独立 section，与 experience 并列，是技术岗简历的核心）
+- education：多条 entry，每条含学校、专业、学位、入学时间、毕业时间、GPA/排名、荣誉奖项、核心课程、学校地点
+- certifications：单条，证书与培训
+- awards：单条，荣誉奖项
 
 【输出要求】
 - 在代码块中输出 JSON：\`\`\`json ... \`\`\`
@@ -134,6 +160,7 @@ ${fieldsList}
 - 不要输出 personal.avatar 字段
 - 提取不到则填空字符串 ""
 - 日期尽量保留原格式（如 "2023.06"、"2020-2022"、"2018.09 - 2022.06"）
+- 工作经历、项目经历、教育经历的每条 entry 都要有完整字段，不要省略
 - 在 JSON 之后，用一句话告诉用户解析已完成、并指出 1-2 个缺失/可疑字段等待用户确认
 `
 }

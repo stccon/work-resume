@@ -4,7 +4,6 @@ import { Sidebar } from "@/components/Sidebar"
 import { ChatMessage } from "@/components/ChatMessage"
 import { ChatInput } from "@/components/ChatInput"
 import { SettingsDialog } from "@/components/SettingsDialog"
-import { FileUpload } from "@/components/FileUpload"
 import { WelcomeGuide } from "@/components/WelcomeGuide"
 import { ResumePreview } from "@/components/ResumePreview"
 import { ToastContainer, toast } from "@/components/Toast"
@@ -603,10 +602,9 @@ function App() {
       const list = await window.electronAPI.listResumes()
       setSavedResumes(list)
 
-      const [avatarResult, themeResult] = await Promise.all([
-        window.electronAPI.extractPdfAvatarPayload(filePath).catch(() => null),
-        window.electronAPI.extractPdfTheme(filePath).catch(() => null),
-      ])
+      const avatarResult = await window.electronAPI
+        .extractPdfAvatarPayload(filePath)
+        .catch(() => null)
 
       if (avatarResult && avatarResult.rgbBase64) {
         const dataUrl = await payloadToDataUrl(avatarResult)
@@ -615,29 +613,6 @@ function App() {
           localStorage.setItem(AVATAR_STORAGE_KEY, dataUrl)
           localStorage.setItem(AVATAR_ENABLED_KEY, "1")
           setAvatarEnabled(true)
-        }
-      }
-
-      if (themeResult && !(themeResult as any).error) {
-        try {
-          const saveRes = await window.electronAPI.saveImportedTheme(themeResult as any)
-          if (saveRes && !(saveRes as any).error) {
-            const themeObj = themeResult as DetectedTheme
-            const updated: VisualTheme = { ...(themeObj as any), isImported: true }
-            setVisualThemes((prev) => {
-              const filtered = prev.filter((t) => t.name !== updated.name)
-              return [...filtered, updated]
-            })
-            setCurrentVisualTheme(updated)
-            const pct = Math.round((themeObj.confidence ?? 0) * 100)
-            if (pct < 40) {
-              toast("info", `已近似复刻主题（${pct}% 复刻度）`)
-            } else {
-              toast("success", `已复刻原 PDF 主题（${pct}%）`)
-            }
-          }
-        } catch (err) {
-          console.error("Save imported theme error:", err)
         }
       }
 
@@ -678,10 +653,6 @@ function App() {
     } catch (err: any) {
       toast("error", `导出失败: ${err.message}`)
     }
-  }
-
-  const handleFileSelected = (_file: File) => {
-    toast("info", "已选择文件")
   }
 
   const handleVisualThemeChange = (theme: VisualTheme) => {
@@ -737,6 +708,7 @@ function App() {
         onSelectResume={handleSelectResume}
         onDeleteResume={handleDeleteResume}
         onCreateResume={handleCreateResume}
+        onImportPdf={handleImportPdfResume}
       />
 
       <div className="flex-1 flex flex-col">
@@ -813,9 +785,6 @@ function App() {
         ) : (
           <div className="flex-1 flex overflow-hidden">
             <div className="flex-1 flex flex-col min-w-0">
-              {!resumeData && (
-                <FileUpload onFileSelected={handleFileSelected} onAnalyze={handleImportPdfResume} />
-              )}
               <div className="flex-1 overflow-y-auto">
                 {messages.length === 0 && !loading && !resumeData ? (
                   <div className="flex flex-col items-center justify-center h-full text-muted-foreground space-y-4">
@@ -842,7 +811,7 @@ function App() {
                   </div>
                 )}
               </div>
-              <ChatInput onSend={handleSend} onImportPdf={handleImportPdfResume} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行，可拖入 PDF）"} />
+              <ChatInput onSend={handleSend} disabled={loading} placeholder={loading ? "AI 思考中..." : "输入消息...（Enter 发送，Shift+Enter 换行）"} />
             </div>
             <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
               {composedResumeData && templateData ? (

@@ -673,7 +673,17 @@ function getFieldLabel(section, fieldId) {
     school: "学校",
     major: "专业",
     degree: "学位",
-    gradYear: "毕业年份"
+    gradYear: "毕业年份",
+    location: "地点",
+    gpa: "GPA",
+    honors: "荣誉奖项",
+    coursework: "核心课程",
+    role: "担任角色",
+    link: "项目链接",
+    highlights: "项目亮点",
+    industry: "行业",
+    linkedin: "LinkedIn",
+    title: "求职意向"
   };
   for (const [key, label] of Object.entries(known)) {
     if (fieldId.includes(key)) return label;
@@ -1387,7 +1397,7 @@ function setupIPC() {
   });
   electron.ipcMain.handle("pdf:extract-style", async (_event, filePath) => {
     try {
-      const { extractPdfStyle } = await Promise.resolve().then(() => require("./pdf-extractor-CreC-WkZ.js"));
+      const { extractPdfStyle } = await Promise.resolve().then(() => require("./pdf-extractor-CfuUvTk6.js"));
       return await extractPdfStyle(filePath);
     } catch (err) {
       console.error("PDF extraction error:", err);
@@ -1396,8 +1406,8 @@ function setupIPC() {
   });
   electron.ipcMain.handle("pdf:parse-resume", async (_event, filePath) => {
     try {
-      const { parseResumePdf } = await Promise.resolve().then(() => require("./resume-parser-D2ahUOmW.js"));
-      const { mapToTemplate } = await Promise.resolve().then(() => require("./template-mapper-D-v32c9-.js"));
+      const { parseResumePdf } = await Promise.resolve().then(() => require("./resume-parser-BIJk7JHq.js"));
+      const { mapToTemplate } = await Promise.resolve().then(() => require("./template-mapper-DN_zI3CN.js"));
       const parsed = await parseResumePdf(filePath);
       const tmpl = readTemplateJSON("general");
       if (!tmpl) return { error: "general 模板不存在" };
@@ -1418,7 +1428,7 @@ function setupIPC() {
   });
   electron.ipcMain.handle("pdf:extract-theme", async (_event, filePath) => {
     try {
-      const { extractPdfTheme } = await Promise.resolve().then(() => require("./pdf-theme-extractor-DmwyzMm3.js"));
+      const { extractPdfTheme } = await Promise.resolve().then(() => require("./pdf-theme-extractor-zKMnEqMu.js"));
       return await extractPdfTheme(filePath);
     } catch (err) {
       console.error("PDF theme extraction error:", err);
