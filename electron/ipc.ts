@@ -32,6 +32,21 @@ function saveResumes(resumes: SavedResume[]) {
   store.set("resumes", resumes)
 }
 
+interface AvatarEntry {
+  dataUrl: string
+  enabled: boolean
+}
+
+type AvatarMap = Record<string, AvatarEntry>
+
+function getAvatars(): AvatarMap {
+  return store.get("avatars", {}) as AvatarMap
+}
+
+function saveAvatars(avatars: AvatarMap) {
+  store.set("avatars", avatars)
+}
+
 function readJSONSafe(filePath: string): any | null {
   try {
     if (!fs.existsSync(filePath)) return null
@@ -71,6 +86,10 @@ function readTemplateJSON(name: string): any | null {
 }
 
 export function setupIPC() {
+  ipcMain.handle("app:get-version", async () => {
+    return app.getVersion()
+  })
+
   ipcMain.handle("chat:send", async (event, text: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     try {
@@ -227,6 +246,11 @@ export function setupIPC() {
     const resumes = getResumes().filter((r) => r.id !== id)
     saveResumes(resumes)
     removeResumeSession(id)
+    const avatars = getAvatars()
+    if (avatars[id]) {
+      delete avatars[id]
+      saveAvatars(avatars)
+    }
   })
 
   ipcMain.handle("resume:export-pdf", async (_event, data: any, template: any, visualThemeName?: string) => {
@@ -419,6 +443,33 @@ export function setupIPC() {
 
   ipcMain.handle("resume:get-last-active", async () => {
     return store.get("lastActiveResumeId", null)
+  })
+
+  // ── Avatar IPC (per-resume) ──
+
+  ipcMain.handle("avatar:get", async (_event, resumeId: string): Promise<AvatarEntry | null> => {
+    return getAvatars()[resumeId] || null
+  })
+
+  ipcMain.handle("avatar:set", async (_event, resumeId: string, dataUrl: string, enabled: boolean) => {
+    const avatars = getAvatars()
+    avatars[resumeId] = { dataUrl, enabled }
+    saveAvatars(avatars)
+  })
+
+  ipcMain.handle("avatar:remove", async (_event, resumeId: string) => {
+    const avatars = getAvatars()
+    if (avatars[resumeId]) {
+      delete avatars[resumeId]
+      saveAvatars(avatars)
+    }
+  })
+
+  ipcMain.handle("avatar:migrate-from-legacy", async (_event, resumeId: string, dataUrl: string, enabled: boolean) => {
+    const avatars = getAvatars()
+    avatars[resumeId] = { dataUrl, enabled }
+    saveAvatars(avatars)
+    return { success: true }
   })
 
   ipcMain.handle("log:write", async (_event, tag: string, message: string) => {

@@ -359,10 +359,10 @@ function renderResumeCSS(theme) {
   const f = theme.fonts;
   const r = theme.borderRadius;
   const v2 = theme.v2Config;
-  const baseCSS = `* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:${f.body}; font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; background:${c.background}; }
+  const baseCSS = `.resume-document, .resume-two-column, .resume-document *, .resume-two-column * { margin:0; padding:0; box-sizing:border-box; }
+.resume-document, .resume-two-column { font-family:${f.body}; font-size:${t.bodyFontSize}; color:${c.text}; line-height:${t.lineHeight}; background:${c.background}; }
 
-@media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+@media print { .resume-document, .resume-two-column { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 
 .resume-header { margin-bottom:20px; }
 .resume-header.centered { text-align:center; }
@@ -1129,6 +1129,12 @@ function getResumes() {
 function saveResumes(resumes) {
   store.set("resumes", resumes);
 }
+function getAvatars() {
+  return store.get("avatars", {});
+}
+function saveAvatars(avatars) {
+  store.set("avatars", avatars);
+}
 function readJSONSafe(filePath) {
   try {
     if (!fs.existsSync(filePath)) return null;
@@ -1162,6 +1168,9 @@ function readTemplateJSON(name) {
   return null;
 }
 function setupIPC() {
+  electron.ipcMain.handle("app:get-version", async () => {
+    return electron.app.getVersion();
+  });
   electron.ipcMain.handle("chat:send", async (event, text) => {
     var _a;
     const win = electron.BrowserWindow.fromWebContents(event.sender);
@@ -1296,6 +1305,11 @@ function setupIPC() {
     const resumes = getResumes().filter((r) => r.id !== id);
     saveResumes(resumes);
     removeResumeSession(id);
+    const avatars = getAvatars();
+    if (avatars[id]) {
+      delete avatars[id];
+      saveAvatars(avatars);
+    }
   });
   electron.ipcMain.handle("resume:export-pdf", async (_event, data, template, visualThemeName) => {
     const win = new electron.BrowserWindow({
@@ -1468,6 +1482,27 @@ function setupIPC() {
   electron.ipcMain.handle("resume:get-last-active", async () => {
     return store.get("lastActiveResumeId", null);
   });
+  electron.ipcMain.handle("avatar:get", async (_event, resumeId) => {
+    return getAvatars()[resumeId] || null;
+  });
+  electron.ipcMain.handle("avatar:set", async (_event, resumeId, dataUrl, enabled) => {
+    const avatars = getAvatars();
+    avatars[resumeId] = { dataUrl, enabled };
+    saveAvatars(avatars);
+  });
+  electron.ipcMain.handle("avatar:remove", async (_event, resumeId) => {
+    const avatars = getAvatars();
+    if (avatars[resumeId]) {
+      delete avatars[resumeId];
+      saveAvatars(avatars);
+    }
+  });
+  electron.ipcMain.handle("avatar:migrate-from-legacy", async (_event, resumeId, dataUrl, enabled) => {
+    const avatars = getAvatars();
+    avatars[resumeId] = { dataUrl, enabled };
+    saveAvatars(avatars);
+    return { success: true };
+  });
   electron.ipcMain.handle("log:write", async (_event, tag, message) => {
     log(tag, message);
   });
@@ -1547,6 +1582,7 @@ process.on("unhandledRejection", (err) => {
   console.error("Unhandled rejection:", err);
 });
 electron.app.whenReady().then(async () => {
+  electron.Menu.setApplicationMenu(null);
   ensureDirectories();
   setupIPC();
   await initOpencode();

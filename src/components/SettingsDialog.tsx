@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { X, Sun, Moon, Key } from "lucide-react"
+import { useEffect, useState } from "react"
+import { X, Sun, Moon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface SettingsDialogProps {
@@ -21,7 +21,12 @@ export function SettingsDialog({
   currentModel,
   onSelectModel,
 }: SettingsDialogProps) {
-  const [apiKey, setApiKey] = useState("")
+  const [version, setVersion] = useState<string>("")
+
+  useEffect(() => {
+    if (!open) return
+    window.electronAPI.getVersion().then(setVersion).catch(() => setVersion(""))
+  }, [open])
 
   if (!open) return null
 
@@ -62,21 +67,11 @@ export function SettingsDialog({
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              <div className="flex items-center gap-1">
-                <Key className="w-3 h-3" />
-                API Key（可选）
-              </div>
-            </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="输入自定义 API Key..."
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-            <p className="text-xs text-muted-foreground mt-1">留空则使用默认免费模型</p>
+          <div className="pt-4 border-t border-border">
+            <div className="text-sm font-medium mb-2">关于</div>
+            <div className="text-xs text-muted-foreground">
+              版本 {version || "—"}
+            </div>
           </div>
         </div>
       </div>

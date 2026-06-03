@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { buildFirstMessagePrompt, buildResumeContext } from "@/adapter/distillation"
+import { buildFirstMessagePrompt, buildResumeContext, buildRefinePrompt, stripAvatar } from "@/adapter/distillation"
 import type { ResumeData } from "@/types/resume"
 
 describe("buildFirstMessagePrompt", () => {
@@ -70,5 +70,49 @@ describe("buildResumeContext", () => {
   it("should indicate first-time when resume is empty", () => {
     const result = buildResumeContext(null)
     expect(result).toContain("第一次对话")
+  })
+})
+
+describe("avatar stripping", () => {
+  const avatar = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+  const dirtySections = {
+    personal: { name: "王五", avatar },
+    summary: { summary: "5年经验" },
+  }
+
+  it("buildFirstMessagePrompt should not include avatar base64", () => {
+    const resume: ResumeData = { template: "general", sections: dirtySections }
+    const result = buildFirstMessagePrompt(resume)
+    expect(result).not.toContain(avatar)
+    expect(result).not.toContain("base64")
+    expect(result).toContain("王五")
+  })
+
+  it("buildResumeContext should not include avatar base64", () => {
+    const resume: ResumeData = { template: "general", sections: dirtySections }
+    const result = buildResumeContext(resume)
+    expect(result).not.toContain(avatar)
+    expect(result).not.toContain("base64")
+    expect(result).toContain("王五")
+  })
+
+  it("buildRefinePrompt should not include avatar base64", () => {
+    const resume: ResumeData = { template: "general", sections: dirtySections }
+    const result = buildRefinePrompt(resume, 1)
+    expect(result).not.toContain(avatar)
+    expect(result).not.toContain("base64")
+    expect(result).toContain("王五")
+  })
+
+  it("stripAvatar should not mutate the original sections object", () => {
+    const original = { personal: { name: "赵六", avatar: "data:image/png;base64,XXX" } }
+    const cloned = stripAvatar(original)
+    expect(cloned.personal.avatar).toBeUndefined()
+    expect(original.personal.avatar).toBe("data:image/png;base64,XXX")
+  })
+
+  it("stripAvatar should handle sections without personal gracefully", () => {
+    const result = stripAvatar({ summary: { summary: "test" } })
+    expect(result).toEqual({ summary: { summary: "test" } })
   })
 })

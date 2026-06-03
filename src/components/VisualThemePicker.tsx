@@ -8,9 +8,6 @@ interface VisualThemePickerProps {
   currentTheme: VisualTheme
   onChange: (theme: VisualTheme) => void
   onDeleteImported?: (themeName: string) => void
-  avatarEnabled: boolean
-  onAvatarEnabledChange: (enabled: boolean) => void
-  hasAvatar: boolean
 }
 
 const FAMILY_LABEL: Record<string, string> = {
@@ -29,9 +26,6 @@ export function VisualThemePicker({
   currentTheme,
   onChange,
   onDeleteImported,
-  avatarEnabled,
-  onAvatarEnabledChange,
-  hasAvatar,
 }: VisualThemePickerProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -148,32 +142,6 @@ export function VisualThemePicker({
                 ))}
               </div>
             ))}
-
-            {hasAvatar && (
-              <div className="border-t border-border/50 px-3 py-2.5 bg-accent/20 sticky bottom-0">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-medium">显示头像</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      {avatarEnabled ? "已开启" : "已关闭"}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onAvatarEnabledChange(!avatarEnabled)}
-                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
-                      avatarEnabled ? "bg-primary" : "bg-muted"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        avatarEnabled ? "translate-x-[18px]" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}

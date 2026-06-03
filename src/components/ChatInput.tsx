@@ -48,7 +48,7 @@ export function ChatInput({ onSend, disabled, placeholder = "输入消息..." }:
           onInput={handleInput}
           placeholder={placeholder}
           disabled={disabled}
-          rows={1}
+          rows={2}
           className={cn(
             "flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm",
             "placeholder:text-muted-foreground",

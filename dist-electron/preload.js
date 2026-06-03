@@ -41,5 +41,10 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   listImportedThemes: () => electron.ipcRenderer.invoke("theme:list-imported"),
   setLastActiveResume: (id) => electron.ipcRenderer.invoke("resume:set-last-active", id),
   getLastActiveResume: () => electron.ipcRenderer.invoke("resume:get-last-active"),
-  log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message)
+  getAvatar: (resumeId) => electron.ipcRenderer.invoke("avatar:get", resumeId),
+  setAvatar: (resumeId, dataUrl, enabled) => electron.ipcRenderer.invoke("avatar:set", resumeId, dataUrl, enabled),
+  removeAvatar: (resumeId) => electron.ipcRenderer.invoke("avatar:remove", resumeId),
+  migrateAvatarFromLegacy: (resumeId, dataUrl, enabled) => electron.ipcRenderer.invoke("avatar:migrate-from-legacy", resumeId, dataUrl, enabled),
+  log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message),
+  getVersion: () => electron.ipcRenderer.invoke("app:get-version")
 });

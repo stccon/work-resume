@@ -7,7 +7,7 @@ import { SettingsDialog } from "@/components/SettingsDialog"
 import { WelcomeGuide } from "@/components/WelcomeGuide"
 import { ResumePreview } from "@/components/ResumePreview"
 import { ToastContainer, toast } from "@/components/Toast"
-import { AvatarUploader } from "@/components/AvatarUploader"
+import { ResumeNamePill } from "@/components/ResumeNamePill"
 import type { ChatMessage as ChatMessageType } from "@/adapter/ChatAdapter"
 import type { TemplateDefinition } from "@/types/template"
 import type { ResumeData } from "@/types/resume"
@@ -18,6 +18,7 @@ import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../the
 import { buildResumeContext, buildFirstMessagePrompt, buildImportResumePrompt, buildRefinePrompt } from "@/adapter/distillation"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 
+// DEPRECATED: 仅 group 6 迁移逻辑读取一次，迁移完成后删除
 const AVATAR_STORAGE_KEY = "user-avatar"
 const AVATAR_ENABLED_KEY = "user-avatar-enabled"
 
@@ -112,40 +113,16 @@ function copyRgbToCanvas(
   }
 }
 
-function getThemeAvatarDefault(theme: VisualTheme): boolean {
-  const v2 = theme.v2Config?.avatar
-  if (v2) return v2.defaultEnabled
-  return theme.avatar?.defaultEnabled ?? false
-}
-
-function detectSampleLanguage(text: string): "chinese" | "english" {
-  if (!text) return "chinese"
-  return /[\u4e00-\u9fa5]/.test(text) ? "chinese" : "english"
-}
-
 function composeDataWithAvatar(
   data: ResumeData | null,
-  userAvatar: string | null,
-  userEnabled: boolean | null,
-  theme: VisualTheme,
+  avatarEntry: { dataUrl: string; enabled: boolean } | null,
+  _theme: VisualTheme,
 ): ResumeData | null {
   if (!data) return data
   const personal = { ...(data.sections.personal || {}) }
-  const hasUserAvatar = !!userAvatar
-  const themeDefault = getThemeAvatarDefault(theme)
-  const sampleText = [personal.name, personal.title, personal.email].filter(Boolean).join(" ")
-  const lang = detectSampleLanguage(sampleText)
-  const langAutoEnabled = lang === "chinese"
 
-  let shouldShow: boolean
-  if (userEnabled !== null) {
-    shouldShow = userEnabled && hasUserAvatar
-  } else {
-    shouldShow = hasUserAvatar && (themeDefault || langAutoEnabled)
-  }
-
-  if (shouldShow && userAvatar) {
-    personal.avatar = userAvatar
+  if (avatarEntry && avatarEntry.enabled && avatarEntry.dataUrl) {
+    personal.avatar = avatarEntry.dataUrl
   } else {
     delete personal.avatar
   }
@@ -175,31 +152,10 @@ function App() {
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
   const [visualThemes, setVisualThemes] = useState<VisualTheme[]>(getAllVisualThemes())
   const [currentVisualTheme, setCurrentVisualTheme] = useState<VisualTheme>(getVisualTheme(DEFAULT_VISUAL_THEME))
-  const [userAvatar, setUserAvatar] = useState<string | null>(() => {
-    try { return localStorage.getItem(AVATAR_STORAGE_KEY) } catch { return null }
-  })
-  const [avatarEnabled, setAvatarEnabled] = useState<boolean | null>(() => {
-    try {
-      const raw = localStorage.getItem(AVATAR_ENABLED_KEY)
-      return raw === null ? null : raw === "1"
-    } catch { return null }
-  })
+  const [avatars, setAvatars] = useState<Record<string, { dataUrl: string; enabled: boolean }>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const importedFlowActive = useRef(false)
   const [refineCount, setRefineCount] = useState(0)
-
-  useEffect(() => {
-    try {
-      if (userAvatar) localStorage.setItem(AVATAR_STORAGE_KEY, userAvatar)
-      else localStorage.removeItem(AVATAR_STORAGE_KEY)
-    } catch { /* quota exceeded - ignore */ }
-  }, [userAvatar])
-
-  useEffect(() => {
-    try {
-      if (avatarEnabled !== null) localStorage.setItem(AVATAR_ENABLED_KEY, avatarEnabled ? "1" : "0")
-    } catch { /* ignore */ }
-  }, [avatarEnabled])
 
   const resumeDataRef = useRef(resumeData)
   resumeDataRef.current = resumeData
@@ -209,6 +165,29 @@ function App() {
   messagesRef.current = messages
   const savedResumesRef = useRef(savedResumes)
   savedResumesRef.current = savedResumes
+  const avatarsRef = useRef(avatars)
+  avatarsRef.current = avatars
+
+  const setAvatarFor = useCallback(async (resumeId: string, dataUrl: string) => {
+    setAvatars((prev) => ({ ...prev, [resumeId]: { dataUrl, enabled: true } }))
+    await window.electronAPI.setAvatar(resumeId, dataUrl, true)
+  }, [])
+
+  const removeAvatarFor = useCallback(async (resumeId: string) => {
+    setAvatars((prev) => {
+      const next = { ...prev }
+      delete next[resumeId]
+      return next
+    })
+    await window.electronAPI.removeAvatar(resumeId)
+  }, [])
+
+  const setAvatarEnabledFor = useCallback(async (resumeId: string, enabled: boolean) => {
+    const current = avatarsRef.current[resumeId]
+    if (!current) return
+    setAvatars((prev) => ({ ...prev, [resumeId]: { ...current, enabled } }))
+    await window.electronAPI.setAvatar(resumeId, current.dataUrl, enabled)
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -231,6 +210,31 @@ function App() {
 
       const status = await window.electronAPI.opencodeStatus().catch(() => ({ connected: false }))
       setOpencodeConnected(status.connected)
+
+      // 6.5 一次性清理：扫所有简历的 sections.personal.avatar 脏数据
+      const dirty = list.filter((r) => r.data?.sections?.personal && "avatar" in r.data.sections.personal)
+      for (const r of dirty) {
+        delete r.data.sections.personal.avatar
+        await window.electronAPI.updateResume(r.id, r.data).catch(() => {})
+      }
+
+      // 6.1-6.3 历史头像迁移：localStorage → 上次活跃简历
+      const legacyDataUrl = (() => { try { return localStorage.getItem(AVATAR_STORAGE_KEY) } catch { return null } })()
+      const legacyEnabled = (() => { try { return localStorage.getItem(AVATAR_ENABLED_KEY) !== "0" } catch { return true } })()
+
+      if (legacyDataUrl) {
+        const lastId = await window.electronAPI.getLastActiveResume()
+        const targetId = lastId && list.some((r) => r.id === lastId) ? lastId : null
+        if (targetId) {
+          await window.electronAPI.migrateAvatarFromLegacy(targetId, legacyDataUrl, legacyEnabled)
+          try {
+            localStorage.removeItem(AVATAR_STORAGE_KEY)
+            localStorage.removeItem(AVATAR_ENABLED_KEY)
+          } catch { /* ignore */ }
+          setAvatars((prev) => ({ ...prev, [targetId]: { dataUrl: legacyDataUrl, enabled: legacyEnabled } }))
+        }
+        // else: 6.3 没有活跃简历 → 保留 localStorage，留给 handleCreateResume / handleImportPdfResume 兜底
+      }
 
       if (list.length > 0) {
         const lastId = await window.electronAPI.getLastActiveResume()
@@ -263,6 +267,13 @@ function App() {
     setMessages([])
     window.electronAPI.setLastActiveResume(id)
 
+    if (!avatarsRef.current[id]) {
+      const entry = await window.electronAPI.getAvatar(id)
+      if (entry) {
+        setAvatars((prev) => ({ ...prev, [id]: entry }))
+      }
+    }
+
     let tmpl = await window.electronAPI.getTemplate(saved.templateName)
     if (!tmpl) tmpl = await window.electronAPI.getTemplate("general")
     if (tmpl) setTemplateData(tmpl)
@@ -289,6 +300,18 @@ function App() {
 
     const emptyData: ResumeData = { template: "general", sections: {} }
     const entry = await window.electronAPI.saveResume(emptyData, tmpl)
+
+    // 6.4 兜底迁移：若 localStorage 还残留旧头像，迁移到这份新简历
+    const legacyDataUrl = (() => { try { return localStorage.getItem(AVATAR_STORAGE_KEY) } catch { return null } })()
+    const legacyEnabled = (() => { try { return localStorage.getItem(AVATAR_ENABLED_KEY) !== "0" } catch { return true } })()
+    if (legacyDataUrl) {
+      await window.electronAPI.migrateAvatarFromLegacy(entry.id, legacyDataUrl, legacyEnabled)
+      try {
+        localStorage.removeItem(AVATAR_STORAGE_KEY)
+        localStorage.removeItem(AVATAR_ENABLED_KEY)
+      } catch { /* ignore */ }
+      setAvatars((prev) => ({ ...prev, [entry.id]: { dataUrl: legacyDataUrl, enabled: legacyEnabled } }))
+    }
 
     setActiveResumeId(entry.id)
     setResumeData(null)
@@ -346,6 +369,9 @@ function App() {
           parsed.template = "general"
         }
         flattenSectionValues(parsed)
+        if (parsed.sections.personal) {
+          delete parsed.sections.personal.avatar
+        }
         return parsed as ResumeData
       }
     } catch { /* ignore */ }
@@ -572,6 +598,18 @@ function App() {
       setTemplateData(tmpl)
       setSavedResumes((prev) => [entry, ...prev.filter((r) => r.id !== entry.id)])
 
+      // 6.4 兜底迁移：若 localStorage 还残留旧头像，迁移到这份新简历
+      const legacyDataUrl = (() => { try { return localStorage.getItem(AVATAR_STORAGE_KEY) } catch { return null } })()
+      const legacyEnabled = (() => { try { return localStorage.getItem(AVATAR_ENABLED_KEY) !== "0" } catch { return true } })()
+      if (legacyDataUrl) {
+        await window.electronAPI.migrateAvatarFromLegacy(entry.id, legacyDataUrl, legacyEnabled)
+        try {
+          localStorage.removeItem(AVATAR_STORAGE_KEY)
+          localStorage.removeItem(AVATAR_ENABLED_KEY)
+        } catch { /* ignore */ }
+        setAvatars((prev) => ({ ...prev, [entry.id]: { dataUrl: legacyDataUrl, enabled: legacyEnabled } }))
+      }
+
       await window.electronAPI.switchResume(entry.id)
       await window.electronAPI.setLastActiveResume(entry.id)
 
@@ -609,10 +647,7 @@ function App() {
       if (avatarResult && avatarResult.rgbBase64) {
         const dataUrl = await payloadToDataUrl(avatarResult)
         if (dataUrl) {
-          setUserAvatar(dataUrl)
-          localStorage.setItem(AVATAR_STORAGE_KEY, dataUrl)
-          localStorage.setItem(AVATAR_ENABLED_KEY, "1")
-          setAvatarEnabled(true)
+          await setAvatarFor(entry.id, dataUrl)
         }
       }
 
@@ -695,8 +730,8 @@ function App() {
     : null
 
   const composedResumeData = useMemo(
-    () => composeDataWithAvatar(resumeData, userAvatar, avatarEnabled, currentVisualTheme),
-    [resumeData, userAvatar, avatarEnabled, currentVisualTheme]
+    () => composeDataWithAvatar(resumeData, activeResumeId ? avatars[activeResumeId] || null : null, currentVisualTheme),
+    [resumeData, activeResumeId, avatars, currentVisualTheme]
   )
 
   return (
@@ -724,27 +759,28 @@ function App() {
                 Opencode 未连接 · 重试
               </button>
             )}
-            {activeResume && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-muted-foreground">
-                {activeResume.title}
-              </span>
-            )}
+            {activeResume && (() => {
+              const rid = activeResume.id
+              return (
+                <ResumeNamePill
+                  title={activeResume.title}
+                  avatar={avatars[rid]?.dataUrl ?? null}
+                  avatarEnabled={!!avatars[rid]?.enabled}
+                  onUpload={(dataUrl) => setAvatarFor(rid, dataUrl)}
+                  onRemove={() => removeAvatarFor(rid)}
+                  onToggleEnabled={(enabled) => setAvatarEnabledFor(rid, enabled)}
+                />
+              )
+            })()}
           </div>
           <div className="flex items-center gap-2">
             {resumeData && (
               <>
-                <AvatarUploader
-                  avatar={userAvatar}
-                  onChange={setUserAvatar}
-                />
                 <VisualThemePicker
                   themes={visualThemes}
                   currentTheme={currentVisualTheme}
                   onChange={handleVisualThemeChange}
                   onDeleteImported={handleDeleteImportedTheme}
-                  avatarEnabled={!!userAvatar && (avatarEnabled ?? getThemeAvatarDefault(currentVisualTheme))}
-                  onAvatarEnabledChange={(enabled) => setAvatarEnabled(enabled)}
-                  hasAvatar={!!userAvatar}
                 />
                 <button
                   onClick={handleNewChat}

@@ -41,5 +41,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listImportedThemes: () => ipcRenderer.invoke("theme:list-imported") as Promise<string[]>,
   setLastActiveResume: (id: string) => ipcRenderer.invoke("resume:set-last-active", id),
   getLastActiveResume: () => ipcRenderer.invoke("resume:get-last-active") as Promise<string | null>,
+  getAvatar: (resumeId: string) => ipcRenderer.invoke("avatar:get", resumeId) as Promise<{ dataUrl: string; enabled: boolean } | null>,
+  setAvatar: (resumeId: string, dataUrl: string, enabled: boolean) => ipcRenderer.invoke("avatar:set", resumeId, dataUrl, enabled),
+  removeAvatar: (resumeId: string) => ipcRenderer.invoke("avatar:remove", resumeId),
+  migrateAvatarFromLegacy: (resumeId: string, dataUrl: string, enabled: boolean) => ipcRenderer.invoke("avatar:migrate-from-legacy", resumeId, dataUrl, enabled) as Promise<{ success: boolean }>,
   log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),
+  getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
 })

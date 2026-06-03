@@ -1,6 +1,14 @@
 import type { ResumeData } from "@/types/resume"
 import { templateFieldsToString } from "./template-context"
 
+export function stripAvatar(sections: Record<string, any>): Record<string, any> {
+  const cloned = JSON.parse(JSON.stringify(sections)) as Record<string, any>
+  if (cloned.personal && typeof cloned.personal === "object") {
+    delete cloned.personal.avatar
+  }
+  return cloned
+}
+
 export function buildFirstMessagePrompt(profile: ResumeData | null): string {
   if (profile?.sections && Object.keys(profile.sections).length > 0) {
     const name = profile.sections?.personal?.name
@@ -9,7 +17,7 @@ export function buildFirstMessagePrompt(profile: ResumeData | null): string {
 
 用户已有以下简历信息：
 \`\`\`json
-${JSON.stringify(profile.sections, null, 2)}
+${JSON.stringify(stripAvatar(profile.sections), null, 2)}
 \`\`\`
 
 请用自然友好的语气打招呼${name ? `（称呼用户为${name}）` : ""}，问候用户，并询问是否需要继续完善简历或开始新的简历。
@@ -39,7 +47,7 @@ export function buildResumeContext(profile: ResumeData | null, templateName?: st
   const name = templateName || "general"
   const fields = templateFields || templateFieldsToString()
   const existingInfo = profile?.sections && Object.keys(profile.sections).length > 0
-    ? `## 已有简历信息\n\n以下是你已经知道的关于这个用户的简历信息：\n\`\`\`json\n${JSON.stringify(profile.sections, null, 2)}\n\`\`\`\n\n如果用户提供新信息或修改，你的任务是更新这些已有数据。不要重复提问已经知道的信息。`
+    ? `## 已有简历信息\n\n以下是你已经知道的关于这个用户的简历信息：\n\`\`\`json\n${JSON.stringify(stripAvatar(profile.sections), null, 2)}\n\`\`\`\n\n如果用户提供新信息或修改，你的任务是更新这些已有数据。不要重复提问已经知道的信息。`
     : "## 已有简历信息\n\n这是第一次对话，你还没有这个用户的任何简历信息。请通过对话主动收集。\n\n"
 
   return `你是 AI 简历助手。你的核心任务是通过对话帮助用户制作和优化简历。
@@ -184,7 +192,7 @@ export function buildRefinePrompt(resume: ResumeData, iteration: number = 1): st
 
   return `用户已有简历数据（这是第 ${iteration} 次润色）：
 \`\`\`json
-${JSON.stringify(resume.sections, null, 2)}
+${JSON.stringify(stripAvatar(resume.sections), null, 2)}
 \`\`\`
 
 【本轮重点】

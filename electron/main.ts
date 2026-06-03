@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, Menu } from "electron"
 import path from "path"
 import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
@@ -79,6 +79,7 @@ process.on("unhandledRejection", (err) => {
 })
 
 app.whenReady().then(async () => {
+  Menu.setApplicationMenu(null)
   ensureDirectories()
   setupIPC()
   await initOpencode()

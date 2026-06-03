@@ -72,7 +72,12 @@ interface ElectronAPI {
   opencodeRetry: () => Promise<{ connected: boolean }>
   setLastActiveResume: (id: string) => Promise<void>
   getLastActiveResume: () => Promise<string | null>
+  getAvatar: (resumeId: string) => Promise<{ dataUrl: string; enabled: boolean } | null>
+  setAvatar: (resumeId: string, dataUrl: string, enabled: boolean) => Promise<void>
+  removeAvatar: (resumeId: string) => Promise<void>
+  migrateAvatarFromLegacy: (resumeId: string, dataUrl: string, enabled: boolean) => Promise<{ success: boolean }>
   log: (tag: string, message: string) => Promise<void>
+  getVersion: () => Promise<string>
 }
 
 interface File {
