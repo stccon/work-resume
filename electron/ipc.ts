@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, dialog, app } from "electron"
-import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext, switchResume, removeResumeSession } from "./opencode"
+import { startOpencode, stopOpencode, sendPrompt, setModel, getModels, getCurrentModel, isConnected, retryOpencode, setConversationContext, clearConversationContext, switchResume, removeResumeSession, polishField } from "./opencode"
 import path from "path"
 import fs from "fs"
 import os from "os"
@@ -11,6 +11,7 @@ import {
   generateResumeFileName,
 } from "./paths"
 import { renderResumeDocument } from "../src/lib/resume-renderer"
+import { POLISH_SYSTEM_PROMPT, buildPolishUserPrompt } from "../src/adapter/polish"
 
 const Store = require("electron-store")
 const store = new Store({ encryptionKey: "resume-ai-local" })
@@ -154,6 +155,46 @@ export function setupIPC() {
   ipcMain.handle("opencode:retry", async () => {
     const ok = await retryOpencode()
     return { connected: ok }
+  })
+
+  // ── Field-level AI polish (stateless, isolated from chat state) ──
+  const polishControllers = new Map<string, AbortController>()
+
+  ipcMain.handle("ai:polish-field", async (_event, requestId: string, payload: any) => {
+    if (!requestId) {
+      return { content: "", error: "missing requestId", isQuotaError: false }
+    }
+    if (polishControllers.has(requestId)) {
+      return { content: "", error: "duplicate request", isQuotaError: false }
+    }
+    const controller = new AbortController()
+    polishControllers.set(requestId, controller)
+    try {
+      const result = await polishField(
+        {
+          system: POLISH_SYSTEM_PROMPT,
+          userText: buildPolishUserPrompt(payload),
+          fallbackValue: payload?.fieldValue || "",
+        },
+        controller.signal
+      )
+      return { content: result.content, error: null, isQuotaError: false }
+    } catch (err: any) {
+      const msg = err?.message || String(err)
+      const isQuotaError = msg.includes("TOKEN_QUOTA_EXCEEDED")
+      return { content: "", error: msg, isQuotaError }
+    } finally {
+      polishControllers.delete(requestId)
+    }
+  })
+
+  ipcMain.handle("ai:cancel-polish", async (_event, requestId: string) => {
+    const c = polishControllers.get(requestId)
+    if (c) {
+      c.abort()
+      polishControllers.delete(requestId)
+    }
+    return { cancelled: true }
   })
 
   ipcMain.handle("apikey:set", async (_event, provider: string, key: string) => {

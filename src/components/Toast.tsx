@@ -55,6 +55,17 @@ export function ToastContainer() {
           {t.type === "error" && <AlertCircle className="w-4 h-4" />}
           {t.type === "info" && <Info className="w-4 h-4" />}
           <span className="flex-1">{t.message}</span>
+          {t.action && (
+            <button
+              onClick={() => {
+                try { t.action!.onClick() } catch { /* ignore */ }
+                remove(t.id)
+              }}
+              className="px-2 py-0.5 rounded font-medium border border-current/30 hover:bg-current/10 transition-colors"
+            >
+              {t.action.label}
+            </button>
+          )}
           <button onClick={() => remove(t.id)} className="p-0.5 rounded hover:opacity-70">
             <X className="w-3 h-3" />
           </button>

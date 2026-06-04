@@ -47,4 +47,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   migrateAvatarFromLegacy: (resumeId: string, dataUrl: string, enabled: boolean) => ipcRenderer.invoke("avatar:migrate-from-legacy", resumeId, dataUrl, enabled) as Promise<{ success: boolean }>,
   log: (tag: string, message: string) => ipcRenderer.invoke("log:write", tag, message),
   getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
+  polishField: (requestId: string, payload: PolishFieldPayload) => ipcRenderer.invoke("ai:polish-field", requestId, payload) as Promise<{ content: string; error: string | null; isQuotaError: boolean }>,
+  cancelPolish: (requestId: string) => ipcRenderer.invoke("ai:cancel-polish", requestId) as Promise<{ cancelled: boolean }>,
 })
+
+export interface PolishFieldPayload {
+  targetRole: string
+  sectionId: string
+  sectionLabel: string
+  fieldLabel: string
+  fieldValue: string
+  entryNeighbors?: { company?: string; position?: string; startDate?: string; endDate?: string }
+}

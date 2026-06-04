@@ -221,6 +221,65 @@ async function streamFromGlobalEvents(sid, win, signal) {
   } catch {
   }
 }
+const POLISH_TIMEOUT_MS = 3e4;
+async function polishField(call, abortSignal) {
+  var _a, _b;
+  const { cleanPolishResponse: cleanPolishResponse2 } = await Promise.resolve().then(() => polish);
+  const c = await getClient();
+  let createdId = null;
+  let aborted = false;
+  const onAbort = () => {
+    aborted = true;
+  };
+  if (abortSignal) {
+    if (abortSignal.aborted) aborted = true;
+    else abortSignal.addEventListener("abort", onAbort, { once: true });
+  }
+  try {
+    const createResult = await Promise.race([
+      c.session.create(),
+      new Promise(
+        (_, reject) => setTimeout(() => reject(new Error("会话创建超时")), 15e3)
+      )
+    ]);
+    if (createResult.error) throw new Error(JSON.stringify(createResult.error));
+    createdId = (_a = createResult.data) == null ? void 0 : _a.id;
+    if (!createdId) throw new Error("会话 ID 为空");
+    if (aborted) throw new Error("Polish cancelled");
+    const result = await Promise.race([
+      c.session.prompt({
+        path: { id: createdId },
+        body: {
+          system: call.system,
+          parts: [{ type: "text", text: call.userText }],
+          model: { providerID: "opencode", modelID: currentModel }
+        }
+      }),
+      new Promise(
+        (_, reject) => setTimeout(() => reject(new Error(`AI 响应超时（${POLISH_TIMEOUT_MS / 1e3}秒）`)), POLISH_TIMEOUT_MS)
+      )
+    ]);
+    if (aborted) throw new Error("Polish cancelled");
+    if (result.error) {
+      const errorMsg = JSON.stringify(result.error);
+      const isQuotaError = QUOTA_ERROR_PATTERNS.some((p) => p.test(errorMsg));
+      if (isQuotaError) throw new Error("TOKEN_QUOTA_EXCEEDED: token 配额不足，请充值后重试");
+      throw new Error(errorMsg);
+    }
+    const parts = ((_b = result.data) == null ? void 0 : _b.parts) || [];
+    const raw = parts.filter((p) => p.type === "text").map((p) => p.text).join("");
+    const content = cleanPolishResponse2(raw);
+    log("polish-field", `userLen=${call.userText.length} outLen=${content.length}`);
+    return { content: content || call.fallbackValue };
+  } finally {
+    if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
+    if (createdId) {
+      c.session.delete({ path: { id: createdId } }).catch((e) => {
+        log("polish-field", `temp session delete failed: ${(e == null ? void 0 : e.message) || e}`);
+      });
+    }
+  }
+}
 let conversationContext = "";
 function setConversationContext(ctx) {
   conversationContext = ctx;
@@ -690,6 +749,13 @@ function getFieldLabel(section, fieldId) {
   }
   return htmlEscapedText(fieldId);
 }
+function dataAttrsToString(d) {
+  if (!d) return "";
+  let s = ` data-section="${htmlEscapedText(d.section)}"`;
+  s += ` data-field="${htmlEscapedText(d.field)}"`;
+  if (d.entry !== void 0) s += ` data-entry="${d.entry}"`;
+  return s;
+}
 function classifyField(fieldId) {
   const k = fieldId.toLowerCase();
   if (k.includes("detail") || k.includes("description") || k.includes("summary")) return "prose";
@@ -697,30 +763,30 @@ function classifyField(fieldId) {
   if (k.includes("tech") || k.includes("skill") || k.includes("tool") || k.includes("stack") || k.includes("keyword") || k.includes("language")) return "tags";
   return "label-value";
 }
-function renderProse(value, v2 = false) {
+function renderProse(value, v2 = false, dataAttrs) {
   const s = formatValue(value);
   const lines = s.split("\n").filter((l) => l.trim());
   const cls = v2 ? "resume-prose v2" : "resume-prose";
-  return `<div class="${cls}">${lines.map((l) => `<p>${l}</p>`).join("")}</div>`;
+  return `<div class="${cls}"${dataAttrsToString(dataAttrs)}>${lines.map((l) => `<p>${l}</p>`).join("")}</div>`;
 }
-function renderBulletList(value, v2 = false) {
+function renderBulletList(value, v2 = false, dataAttrs) {
   const s = formatValue(value);
   const lines = s.split("\n").filter((l) => l.trim());
   const cls = v2 ? "resume-bullets v2" : "resume-bullets";
-  return `<ul class="${cls}">${lines.map((l) => `<li>${l}</li>`).join("")}</ul>`;
+  return `<ul class="${cls}"${dataAttrsToString(dataAttrs)}>${lines.map((l) => `<li>${l}</li>`).join("")}</ul>`;
 }
-function renderTags(value, v2 = false) {
+function renderTags(value, v2 = false, dataAttrs) {
   const s = formatValue(value);
   const items = s.split(/[,，、\n]/).map((s2) => s2.trim()).filter(Boolean);
   const cls = v2 ? "resume-tag v2" : "resume-tag";
   const containerCls = v2 ? "resume-tags v2" : "resume-tags";
-  return `<div class="${containerCls}">${items.map((t) => `<span class="${cls}">${htmlEscapedText(t)}</span>`).join("")}</div>`;
+  return `<div class="${containerCls}"${dataAttrsToString(dataAttrs)}>${items.map((t) => `<span class="${cls}">${htmlEscapedText(t)}</span>`).join("")}</div>`;
 }
-function renderLabelledField(label, value, v2 = false) {
+function renderLabelledField(label, value, v2 = false, dataAttrs) {
   const rowCls = v2 ? "resume-field-row v2" : "resume-field-row";
   const labelCls = v2 ? "resume-field-label v2" : "resume-field-label";
   const valueCls = v2 ? "resume-field-value v2" : "resume-field-value";
-  return `<div class="${rowCls}"><span class="${labelCls}">${label}：</span><span class="${valueCls}">${formatValue(value)}</span></div>`;
+  return `<div class="${rowCls}"${dataAttrsToString(dataAttrs)}><span class="${labelCls}">${label}：</span><span class="${valueCls}">${formatValue(value)}</span></div>`;
 }
 function renderSkillsSection(section, sectionData, theme, sidebar) {
   const c = theme.colors;
@@ -751,18 +817,20 @@ function renderSkillsSection(section, sectionData, theme, sidebar) {
       }
       continue;
     }
-    overviewHtml.push(`<p class="resume-body-text${isV2 ? " v2" : ""}">${formatValue(value)}</p>`);
+    overviewHtml.push({ key, value, html: `<p class="resume-body-text${isV2 ? " v2" : ""}">${formatValue(value)}</p>` });
   }
   const parts = [];
   if (overviewHtml.length > 0) {
-    parts.push(`<div class="resume-skills-overview" style="margin-bottom:8px">${overviewHtml.join("")}</div>`);
+    const overviewData = overviewHtml.map((o) => o.html).join("");
+    const overviewKey = overviewHtml.map((o) => o.key).join("|");
+    parts.push(`<div class="resume-skills-overview" style="margin-bottom:8px" data-section="skills" data-field="${htmlEscapedText(overviewKey)}">${overviewData}</div>`);
   }
   for (const [cat, values] of categoryGroups) {
     const catLabel = templateLabels.get(cat) || getFieldLabel(section, cat);
     const tagCls = isV2 ? "resume-tag v2" : "resume-tag";
     const tagsHtml = values.map((v) => `<span class="${tagCls}">${htmlEscapedText(v)}</span>`).join("");
     const catLabelStyle = sidebar ? `font-size:${t.bodyFontSize};color:${c.sidebarText ? `${c.sidebarText}cc` : "#ffffffcc"};white-space:nowrap;min-width:60px` : `font-size:${t.bodyFontSize};color:${c.textMuted};white-space:nowrap;min-width:60px`;
-    parts.push(`<div class="resume-skills-category" style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">
+    parts.push(`<div class="resume-skills-category" style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px" data-section="skills" data-field="${htmlEscapedText(cat)}">
       <span class="resume-skills-cat-label" style="${catLabelStyle}">${catLabel}：</span>
       <div class="resume-tags${isV2 ? " v2" : ""}" style="margin:0">
         ${tagsHtml}
@@ -806,9 +874,10 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
   const isSkills = section.id === "skills";
   const isV2 = theme.series === "v2";
   if (isSummary) {
-    const text = Object.values(sectionData)[0];
-    if (!text) return "";
-    return `<p class="resume-body-text${isV2 ? " v2" : ""}">${formatValue(text)}</p>`;
+    const firstEntry = Object.entries(sectionData)[0];
+    if (!firstEntry || !firstEntry[1]) return "";
+    const [summaryKey, summaryText] = firstEntry;
+    return `<p class="resume-body-text${isV2 ? " v2" : ""}"${dataAttrsToString({ section: section.id, field: summaryKey })}>${formatValue(summaryText)}</p>`;
   }
   if (isSkills) {
     return renderSkillsSection(section, sectionData, theme, sidebar);
@@ -825,21 +894,26 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
       const detail = entry.fields.detail || "";
       const knownKeys = /* @__PURE__ */ new Set([titleKey, subtitleKey, "detail", "date", "startDate", "endDate"]);
       const extraKeys = Object.keys(entry.fields).filter((k) => !knownKeys.has(k));
-      const grouped = { prose: [], bullets: [], tags: [], labelled: { keys: [], labels: [] } };
+      const grouped = {
+        prose: [],
+        bullets: [],
+        tags: [],
+        labelled: { keys: [], labels: [] }
+      };
       for (const k of extraKeys) {
         const v = entry.fields[k];
         if (!v) continue;
         const type = classifyField(k);
         if (type === "prose") {
-          grouped.prose.push(v);
+          grouped.prose.push({ key: k, value: v });
           continue;
         }
         if (type === "bullet-list") {
-          grouped.bullets.push(v);
+          grouped.bullets.push({ key: k, value: v });
           continue;
         }
         if (type === "tags") {
-          grouped.tags.push(v);
+          grouped.tags.push({ key: k, value: v });
           continue;
         }
         grouped.labelled.keys.push(k);
@@ -851,6 +925,7 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
       const subTitleCls = isV2 ? "resume-entry-subtitle v2" : "resume-entry-subtitle";
       const dateCls = isV2 ? "resume-entry-date v2" : "resume-entry-date";
       const dividerCls = isV2 ? "resume-entry-divider v2" : "resume-entry-divider";
+      const entryData = { section: section.id, entry: entry.index };
       let html = `<div class="${entryCls}">`;
       if (mainTitle || hasDate) {
         html += `<div class="${headerCls}">`;
@@ -862,19 +937,20 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
         html += `</div>`;
       }
       if (detail) {
-        html += renderProse(detail, isV2);
+        html += renderProse(detail, isV2, { ...entryData, field: `entry${entry.index}_detail` });
       }
-      for (const v of grouped.bullets) {
-        html += renderBulletList(v, isV2);
+      for (const item of grouped.bullets) {
+        html += renderBulletList(item.value, isV2, { ...entryData, field: `entry${entry.index}_${item.key}` });
       }
-      for (const v of grouped.prose) {
-        html += renderProse(v, isV2);
+      for (const item of grouped.prose) {
+        html += renderProse(item.value, isV2, { ...entryData, field: `entry${entry.index}_${item.key}` });
       }
-      for (const v of grouped.tags) {
-        html += renderTags(v, isV2);
+      for (const item of grouped.tags) {
+        html += renderTags(item.value, isV2, { ...entryData, field: `entry${entry.index}_${item.key}` });
       }
       for (let i = 0; i < grouped.labelled.keys.length; i++) {
-        html += renderLabelledField(grouped.labelled.labels[i], entry.fields[grouped.labelled.keys[i]], isV2);
+        const k = grouped.labelled.keys[i];
+        html += renderLabelledField(grouped.labelled.labels[i], entry.fields[k], isV2, { ...entryData, field: `entry${entry.index}_${k}` });
       }
       html += `</div>`;
       if (ei < entries.length - 1) {
@@ -888,13 +964,13 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
   for (const field of section.fields || []) {
     const value = sectionData[field.id];
     if (!value) continue;
-    parts.push(renderLabelledField(htmlEscapedText(field.label), value, isV2));
+    parts.push(renderLabelledField(htmlEscapedText(field.label), value, isV2, { section: section.id, field: field.id }));
   }
   for (const [k, v] of Object.entries(sectionData)) {
     if ((_a = section.fields) == null ? void 0 : _a.some((f) => f.id === k)) continue;
     if (k === "avatar") continue;
     if (!v) continue;
-    parts.push(renderLabelledField(getFieldLabel(section, k), v, isV2));
+    parts.push(renderLabelledField(getFieldLabel(section, k), v, isV2, { section: section.id, field: k }));
   }
   return `<div class="resume-section-content">${parts.join("")}</div>`;
 }
@@ -932,8 +1008,8 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
     if (avatarHtml && avatarCfg && avatarCfg.placement === "top-right") {
       return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-right">
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         </div>
         <div class="resume-avatar-block">${avatarHtml}</div>
       </div>`;
@@ -942,8 +1018,8 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
       return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-left">
         <div class="resume-avatar-block">${avatarHtml}</div>
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         </div>
       </div>`;
     }
@@ -951,16 +1027,16 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
       return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-inline-left">
         <div class="resume-avatar-block">${avatarHtml}</div>
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
           ${contactHtml}
         </div>
       </div>`;
     }
     return `<div class="${`resume-header v2 ${v2.headerVariant}`}">
       <div class="resume-name-block">
-        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
       </div>
       <div class="resume-contact-block">${contactHtml.replace(/<div class="resume-contact">([\s\S]*?)<\/div>/, "$1")}</div>
     </div>`;
@@ -968,8 +1044,8 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
   if (avatarHtml && avatarCfg && (avatarCfg.placement === "top-right" || avatarCfg.placement === "magazine-top")) {
     return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-right">
       <div class="resume-name-block">
-        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         ${contactHtml}
       </div>
       <div class="resume-avatar-block">${avatarHtml}</div>
@@ -979,8 +1055,8 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
     return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-top-left">
       <div class="resume-avatar-block">${avatarHtml}</div>
       <div class="resume-name-block">
-        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         ${contactHtml}
       </div>
     </div>`;
@@ -989,15 +1065,15 @@ function renderV2Header(theme, name, title, contactHtml, avatarHtml = "") {
     return `<div class="resume-header v2 ${v2.headerVariant} with-avatar-inline-left">
       <div class="resume-avatar-block">${avatarHtml}</div>
       <div class="resume-name-block">
-        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         ${contactHtml}
       </div>
     </div>`;
   }
   return `<div class="${`resume-header v2 ${v2.headerVariant}`}">
-    <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-    ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+    <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+    ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
     ${contactHtml}
   </div>`;
 }
@@ -1033,8 +1109,11 @@ function renderResumeBody(data, template, theme) {
   const isTwoCol = theme.layout === "two-column";
   const isSidebarTop = isTwoCol && (avatarCfg == null ? void 0 : avatarCfg.placement) === "sidebar-top";
   const showAvatar = !!avatarUrl && !!avatarCfg;
-  const contactParts = [email, phone, github].filter(Boolean);
-  const contactHtml = contactParts.length > 0 ? `<div class="resume-contact">${contactParts.map((p) => `<span>${htmlEscapedText(p)}</span>`).join("")}</div>` : "";
+  const contactParts = [];
+  if (email) contactParts.push({ key: "email", value: email });
+  if (phone) contactParts.push({ key: "phone", value: phone });
+  if (github) contactParts.push({ key: "github", value: github });
+  const contactHtml = contactParts.length > 0 ? `<div class="resume-contact">${contactParts.map((p) => `<span data-section="personal" data-field="${htmlEscapedText(p.key)}">${htmlEscapedText(p.value)}</span>`).join("")}</div>` : "";
   const avatarHtml = showAvatar && !isSidebarTop ? renderAvatarElement(avatarUrl, theme) : "";
   const sidebarAvatarHtml = showAvatar && isSidebarTop ? renderAvatarElement(avatarUrl, theme) : "";
   let headerHtml;
@@ -1046,8 +1125,8 @@ function renderResumeBody(data, template, theme) {
     if (placement === "top-right" || placement === "magazine-top") {
       headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-top-right">
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
           ${contactHtml}
         </div>
         <div class="resume-avatar-block">${avatarHtml}</div>
@@ -1056,8 +1135,8 @@ function renderResumeBody(data, template, theme) {
       headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-top-left">
         <div class="resume-avatar-block">${avatarHtml}</div>
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
           ${contactHtml}
         </div>
       </div>`;
@@ -1065,22 +1144,22 @@ function renderResumeBody(data, template, theme) {
       headerHtml = `<div class="resume-header ${theme.headerStyle} with-avatar-inline-left">
         <div class="resume-avatar-block">${avatarHtml}</div>
         <div class="resume-name-block">
-          <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-          ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+          <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+          ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
           ${contactHtml}
         </div>
       </div>`;
     } else {
       headerHtml = `<div class="resume-header ${theme.headerStyle}">
-        <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-        ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+        <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+        ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
         ${contactHtml}
       </div>`;
     }
   } else {
     headerHtml = `<div class="resume-header ${theme.headerStyle}">
-      <h1 class="resume-name">${htmlEscapedText(name)}</h1>
-      ${title ? `<p class="resume-title">${htmlEscapedText(title)}</p>` : ""}
+      <h1 class="resume-name" data-section="personal" data-field="name">${htmlEscapedText(name)}</h1>
+      ${title ? `<p class="resume-title" data-section="personal" data-field="title">${htmlEscapedText(title)}</p>` : ""}
       ${contactHtml}
     </div>`;
   }
@@ -1121,6 +1200,55 @@ function renderResumeDocument(data, template, theme, title = "简历") {
 <style>${css}</style></head>
 <body>${body}</body></html>`;
 }
+const POLISH_SYSTEM_PROMPT = `你是一名专业的中文简历润色助手。
+规则：
+1. 只输出润色后的最终文本，不要任何解释、前言、标题或列表标记。
+2. 不要使用引号包裹输出。
+3. 不要输出"以下是改写后的内容"之类的前缀。
+4. 保留原始换行和列表语义（如果是多行/列表项，原样保留每行）。
+5. 保持事实信息（时间、公司名、项目名、数字、专有名词、英文术语）不变。
+6. 改善表达、用词专业度、动词强度和成果量化。
+7. 如果用户额外给出了偏好要求（如"更简洁"、"突出量化"、"英文翻译"），优先满足该偏好，但不要放宽规则 1-3 的格式约束。`;
+const PREFIX_PATTERN = /^\s*(?:(?:以下是|下面是|改写(?:后)?(?:的(?:内容)?)?[:：]?)\s*|好的[,，]?\s*|Sure[,，]?\s*|Here(?:'s| is) the (?:polished|rewritten) (?:version|text)[:：]?\s*|"|"|"|"|'')/i;
+const QUOTE_TRIM = /^["「」`]+|["「」`]+$/g;
+function cleanPolishResponse(raw) {
+  if (!raw) return "";
+  let s = raw.trim();
+  for (let i = 0; i < 3; i++) {
+    const next = s.replace(PREFIX_PATTERN, "").trim();
+    if (next === s) break;
+    s = next;
+  }
+  s = s.replace(QUOTE_TRIM, "");
+  return s.trim();
+}
+function buildPolishUserPrompt(p) {
+  var _a;
+  const roleLine = p.targetRole ? `目标岗位：${p.targetRole}
+` : "";
+  const neighborLines = p.entryNeighbors ? Object.entries(p.entryNeighbors).filter(([, v]) => Boolean(v)).map(([k, v]) => `  - ${k}: ${v}`).join("\n") : "";
+  const neighborsBlock = neighborLines ? `
+所属条目上下文（仅供参考，不要修改）：
+${neighborLines}
+` : "";
+  const extraBlock = ((_a = p.extraPrompt) == null ? void 0 : _a.trim()) ? `
+用户额外要求：${p.extraPrompt.trim()}
+` : "";
+  return `${roleLine}简历段落：${p.sectionLabel}
+字段：${p.fieldLabel}
+${neighborsBlock}
+${extraBlock}
+原文：
+${p.fieldValue}
+
+请润色上述字段内容。`;
+}
+const polish = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  POLISH_SYSTEM_PROMPT,
+  buildPolishUserPrompt,
+  cleanPolishResponse
+}, Symbol.toStringTag, { value: "Module" }));
 const Store = require("electron-store");
 const store = new Store({ encryptionKey: "resume-ai-local" });
 function getResumes() {
@@ -1228,6 +1356,42 @@ function setupIPC() {
   electron.ipcMain.handle("opencode:retry", async () => {
     const ok = await retryOpencode();
     return { connected: ok };
+  });
+  const polishControllers = /* @__PURE__ */ new Map();
+  electron.ipcMain.handle("ai:polish-field", async (_event, requestId, payload) => {
+    if (!requestId) {
+      return { content: "", error: "missing requestId", isQuotaError: false };
+    }
+    if (polishControllers.has(requestId)) {
+      return { content: "", error: "duplicate request", isQuotaError: false };
+    }
+    const controller = new AbortController();
+    polishControllers.set(requestId, controller);
+    try {
+      const result = await polishField(
+        {
+          system: POLISH_SYSTEM_PROMPT,
+          userText: buildPolishUserPrompt(payload),
+          fallbackValue: (payload == null ? void 0 : payload.fieldValue) || ""
+        },
+        controller.signal
+      );
+      return { content: result.content, error: null, isQuotaError: false };
+    } catch (err) {
+      const msg = (err == null ? void 0 : err.message) || String(err);
+      const isQuotaError = msg.includes("TOKEN_QUOTA_EXCEEDED");
+      return { content: "", error: msg, isQuotaError };
+    } finally {
+      polishControllers.delete(requestId);
+    }
+  });
+  electron.ipcMain.handle("ai:cancel-polish", async (_event, requestId) => {
+    const c = polishControllers.get(requestId);
+    if (c) {
+      c.abort();
+      polishControllers.delete(requestId);
+    }
+    return { cancelled: true };
   });
   electron.ipcMain.handle("apikey:set", async (_event, provider, key) => {
     store.set(`apikey-${provider}`, key);

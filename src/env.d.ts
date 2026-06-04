@@ -78,6 +78,17 @@ interface ElectronAPI {
   migrateAvatarFromLegacy: (resumeId: string, dataUrl: string, enabled: boolean) => Promise<{ success: boolean }>
   log: (tag: string, message: string) => Promise<void>
   getVersion: () => Promise<string>
+  polishField: (requestId: string, payload: PolishFieldPayload) => Promise<{ content: string; error: string | null; isQuotaError: boolean }>
+  cancelPolish: (requestId: string) => Promise<{ cancelled: boolean }>
+}
+
+interface PolishFieldPayload {
+  targetRole: string
+  sectionId: string
+  sectionLabel: string
+  fieldLabel: string
+  fieldValue: string
+  entryNeighbors?: { company?: string; position?: string; startDate?: string; endDate?: string }
 }
 
 interface File {

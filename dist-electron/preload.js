@@ -46,5 +46,7 @@ electron.contextBridge.exposeInMainWorld("electronAPI", {
   removeAvatar: (resumeId) => electron.ipcRenderer.invoke("avatar:remove", resumeId),
   migrateAvatarFromLegacy: (resumeId, dataUrl, enabled) => electron.ipcRenderer.invoke("avatar:migrate-from-legacy", resumeId, dataUrl, enabled),
   log: (tag, message) => electron.ipcRenderer.invoke("log:write", tag, message),
-  getVersion: () => electron.ipcRenderer.invoke("app:get-version")
+  getVersion: () => electron.ipcRenderer.invoke("app:get-version"),
+  polishField: (requestId, payload) => electron.ipcRenderer.invoke("ai:polish-field", requestId, payload),
+  cancelPolish: (requestId) => electron.ipcRenderer.invoke("ai:cancel-polish", requestId)
 });

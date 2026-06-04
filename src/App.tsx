@@ -5,7 +5,7 @@ import { ChatMessage } from "@/components/ChatMessage"
 import { ChatInput } from "@/components/ChatInput"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { WelcomeGuide } from "@/components/WelcomeGuide"
-import { ResumePreview } from "@/components/ResumePreview"
+import { EditableResumePreview } from "@/components/EditableResumePreview"
 import { ToastContainer, toast } from "@/components/Toast"
 import { ResumeNamePill } from "@/components/ResumeNamePill"
 import type { ChatMessage as ChatMessageType } from "@/adapter/ChatAdapter"
@@ -15,7 +15,8 @@ import type { VisualTheme } from "@/types/visual-template"
 import { VisualThemePicker } from "@/components/VisualThemePicker"
 import { getAllVisualThemes, getVisualTheme, DEFAULT_VISUAL_THEME } from "../themes/index"
 
-import { buildResumeContext, buildFirstMessagePrompt, buildImportResumePrompt, buildRefinePrompt } from "@/adapter/distillation"
+import { buildResumeContext, buildFirstMessagePrompt, buildImportResumePrompt, buildRefinePrompt, stripAvatar } from "@/adapter/distillation"
+import { templateFieldsToString } from "@/adapter/template-context"
 import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 
 // DEPRECATED: 仅 group 6 迁移逻辑读取一次，迁移完成后删除
@@ -161,6 +162,8 @@ function App() {
   resumeDataRef.current = resumeData
   const activeResumeIdRef = useRef(activeResumeId)
   activeResumeIdRef.current = activeResumeId
+  const templateDataRef = useRef(templateData)
+  templateDataRef.current = templateData
   const messagesRef = useRef(messages)
   messagesRef.current = messages
   const savedResumesRef = useRef(savedResumes)
@@ -554,6 +557,24 @@ function App() {
     triggerFirstMessage()
   }
 
+  const handleResumeChange = useCallback(async (next: ResumeData) => {
+    const stripped = { ...next, sections: stripAvatar(next.sections) }
+    setResumeData(stripped)
+    const id = activeResumeIdRef.current
+    if (id) {
+      try {
+        const updated = await window.electronAPI.updateResume(id, stripped, templateDataRef.current || undefined)
+        if (updated) {
+          setSavedResumes((prev) => prev.map((r) => (r.id === id ? updated : r)))
+        }
+      } catch { /* ignore persistence errors */ }
+      try {
+        const context = buildResumeContext(stripped, templateDataRef.current?.name, templateDataRef.current ? templateFieldsToString(templateDataRef.current) : undefined)
+        await window.electronAPI.setChatContext(context)
+      } catch { /* ignore context sync */ }
+    }
+  }, [])
+
   const handleImportPdfResume = async (file: File) => {
     const isPdf = file.name.toLowerCase().endsWith(".pdf")
     if (!isPdf) {
@@ -851,7 +872,14 @@ function App() {
             </div>
             <div className="w-[55%] min-w-[420px] border-l border-border overflow-y-auto">
               {composedResumeData && templateData ? (
-                <ResumePreview data={composedResumeData} template={templateData} visualTheme={currentVisualTheme} />
+                <EditableResumePreview
+                  key={activeResumeId || "new"}
+                  data={composedResumeData}
+                  template={templateData}
+                  visualTheme={currentVisualTheme}
+                  targetRole={composedResumeData.sections?.personal?.title}
+                  onChange={handleResumeChange}
+                />
               ) : null}
             </div>
           </div>
