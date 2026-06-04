@@ -486,6 +486,24 @@ export function setupIPC() {
     return store.get("lastActiveResumeId", null)
   })
 
+  // ── Persisted UI / Visual Theme ──
+
+  ipcMain.handle("ui-theme:get", async () => {
+    return store.get("uiTheme", "light")
+  })
+
+  ipcMain.handle("ui-theme:set", async (_event, mode: "light" | "dark") => {
+    store.set("uiTheme", mode)
+  })
+
+  ipcMain.handle("visual-theme:get", async () => {
+    return store.get("currentVisualTheme", null)
+  })
+
+  ipcMain.handle("visual-theme:set", async (_event, name: string) => {
+    store.set("currentVisualTheme", name)
+  })
+
   // ── Avatar IPC (per-resume) ──
 
   ipcMain.handle("avatar:get", async (_event, resumeId: string): Promise<AvatarEntry | null> => {

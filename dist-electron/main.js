@@ -1646,6 +1646,18 @@ function setupIPC() {
   electron.ipcMain.handle("resume:get-last-active", async () => {
     return store.get("lastActiveResumeId", null);
   });
+  electron.ipcMain.handle("ui-theme:get", async () => {
+    return store.get("uiTheme", "light");
+  });
+  electron.ipcMain.handle("ui-theme:set", async (_event, mode) => {
+    store.set("uiTheme", mode);
+  });
+  electron.ipcMain.handle("visual-theme:get", async () => {
+    return store.get("currentVisualTheme", null);
+  });
+  electron.ipcMain.handle("visual-theme:set", async (_event, name) => {
+    store.set("currentVisualTheme", name);
+  });
   electron.ipcMain.handle("avatar:get", async (_event, resumeId) => {
     return getAvatars()[resumeId] || null;
   });

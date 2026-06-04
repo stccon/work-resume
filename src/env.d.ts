@@ -72,6 +72,10 @@ interface ElectronAPI {
   opencodeRetry: () => Promise<{ connected: boolean }>
   setLastActiveResume: (id: string) => Promise<void>
   getLastActiveResume: () => Promise<string | null>
+  getUiTheme: () => Promise<"light" | "dark">
+  setUiTheme: (mode: "light" | "dark") => Promise<void>
+  getCurrentVisualTheme: () => Promise<string | null>
+  setCurrentVisualTheme: (name: string) => Promise<void>
   getAvatar: (resumeId: string) => Promise<{ dataUrl: string; enabled: boolean } | null>
   setAvatar: (resumeId: string, dataUrl: string, enabled: boolean) => Promise<void>
   removeAvatar: (resumeId: string) => Promise<void>

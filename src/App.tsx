@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkles, Loader2 } from "lucide-react"
 import { Sidebar } from "@/components/Sidebar"
 import { ChatMessage } from "@/components/ChatMessage"
 import { ChatInput } from "@/components/ChatInput"
@@ -22,6 +22,8 @@ import { buildStyleAnalysisPrompt } from "@/adapter/style-analyzer"
 // DEPRECATED: 仅 group 6 迁移逻辑读取一次，迁移完成后删除
 const AVATAR_STORAGE_KEY = "user-avatar"
 const AVATAR_ENABLED_KEY = "user-avatar-enabled"
+const UI_THEME_STORAGE_KEY = "ui-theme"
+const VISUAL_THEME_STORAGE_KEY = "visual-theme-name"
 
 const log = (tag: string, ...args: any[]) => {
   const msg = args.map(a => typeof a === "string" ? a : JSON.stringify(a)).join(" ")
@@ -138,7 +140,13 @@ function composeDataWithAvatar(
 }
 
 function App() {
-  const [theme, setTheme] = useState<"light" | "dark">("light")
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const stored = localStorage.getItem(UI_THEME_STORAGE_KEY)
+      if (stored === "dark" || stored === "light") return stored
+    } catch { /* ignore */ }
+    return "light"
+  })
   const [messages, setMessages] = useState<ChatMessageType[]>([])
   const [loading, setLoading] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -152,11 +160,18 @@ function App() {
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>([])
   const [activeResumeId, setActiveResumeId] = useState<string | null>(null)
   const [visualThemes, setVisualThemes] = useState<VisualTheme[]>(getAllVisualThemes())
-  const [currentVisualTheme, setCurrentVisualTheme] = useState<VisualTheme>(getVisualTheme(DEFAULT_VISUAL_THEME))
+  const [currentVisualTheme, setCurrentVisualTheme] = useState<VisualTheme>(() => {
+    try {
+      const storedName = localStorage.getItem(VISUAL_THEME_STORAGE_KEY)
+      if (storedName) return getVisualTheme(storedName)
+    } catch { /* ignore */ }
+    return getVisualTheme(DEFAULT_VISUAL_THEME)
+  })
   const [avatars, setAvatars] = useState<Record<string, { dataUrl: string; enabled: boolean }>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const importedFlowActive = useRef(false)
   const [refineCount, setRefineCount] = useState(0)
+  const [exporting, setExporting] = useState(false)
 
   const resumeDataRef = useRef(resumeData)
   resumeDataRef.current = resumeData
@@ -202,14 +217,25 @@ function App() {
 
   useEffect(() => {
     const init = async () => {
-      const [list, modelsList, current] = await Promise.all([
+      const [list, modelsList, current, savedUi, savedVisual] = await Promise.all([
         window.electronAPI.listResumes(),
         window.electronAPI.getModels().catch(() => ["big-pickle"]),
         window.electronAPI.getCurrentModel().catch(() => "big-pickle"),
+        window.electronAPI.getUiTheme().catch(() => "light" as const),
+        window.electronAPI.getCurrentVisualTheme().catch(() => null),
       ])
       setSavedResumes(list)
       setModels(modelsList)
       setCurrentModel(current)
+      if (savedUi === "dark" || savedUi === "light") {
+        setTheme(savedUi)
+        try { localStorage.setItem(UI_THEME_STORAGE_KEY, savedUi) } catch { /* ignore */ }
+      }
+      if (savedVisual) {
+        const resolved = getVisualTheme(savedVisual)
+        setCurrentVisualTheme(resolved)
+        try { localStorage.setItem(VISUAL_THEME_STORAGE_KEY, resolved.name) } catch { /* ignore */ }
+      }
 
       const status = await window.electronAPI.opencodeStatus().catch(() => ({ connected: false }))
       setOpencodeConnected(status.connected)
@@ -699,6 +725,7 @@ function App() {
       toast("error", "请先生成简历数据")
       return
     }
+    setExporting(true)
     try {
       const result = await window.electronAPI.exportPDF(data, tmpl, currentVisualTheme.name)
       if (result.success) {
@@ -708,11 +735,15 @@ function App() {
       }
     } catch (err: any) {
       toast("error", `导出失败: ${err.message}`)
+    } finally {
+      setExporting(false)
     }
   }
 
   const handleVisualThemeChange = (theme: VisualTheme) => {
     setCurrentVisualTheme(theme)
+    try { localStorage.setItem(VISUAL_THEME_STORAGE_KEY, theme.name) } catch { /* ignore */ }
+    window.electronAPI.setCurrentVisualTheme(theme.name)
   }
 
   const handleDeleteImportedTheme = async (themeName: string) => {
@@ -726,6 +757,8 @@ function App() {
       if (currentVisualTheme.name === themeName) {
         const fallback = getVisualTheme(DEFAULT_VISUAL_THEME)
         setCurrentVisualTheme(fallback)
+        try { localStorage.setItem(VISUAL_THEME_STORAGE_KEY, fallback.name) } catch { /* ignore */ }
+        window.electronAPI.setCurrentVisualTheme(fallback.name)
         toast("info", `已切回默认主题 ${fallback.label}`)
       } else {
         toast("success", "已删除导入主题")
@@ -811,9 +844,11 @@ function App() {
                 </button>
                 <button
                   onClick={handleExportPDF}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+                  disabled={exporting}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
                 >
-                  导出 PDF
+                  {exporting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {exporting ? "正在导出 PDF..." : "导出 PDF"}
                 </button>
               </>
             )}
@@ -890,7 +925,12 @@ function App() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         theme={theme}
-        onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+        onToggleTheme={() => {
+          const next = theme === "light" ? "dark" : "light"
+          setTheme(next)
+          try { localStorage.setItem(UI_THEME_STORAGE_KEY, next) } catch { /* ignore */ }
+          window.electronAPI.setUiTheme(next)
+        }}
         models={models}
         currentModel={currentModel}
         onSelectModel={handleSelectModel}
