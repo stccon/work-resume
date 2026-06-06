@@ -5,9 +5,13 @@ node_modules/
 
 # Build outputs
 dist/
+dist-electron/
 build/
 out/
 lib/
+release/
+*.nsis.7z
+*.blockmap
 
 # Environment files
 .env
@@ -29,6 +33,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+*.err
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -59,3 +64,10 @@ tsconfig.tsbuildinfo
 
 # Generated PDF exports
 resumes/
+
+# Scratch / debug helpers
+scratch/
+test-*.bat
+test-*.ps1
+test-*.sh
+

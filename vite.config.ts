@@ -4,6 +4,10 @@ import electron from "vite-plugin-electron"
 import electronRenderer from "vite-plugin-electron-renderer"
 import path from "path"
 
+const alias = {
+  "@": path.resolve(__dirname, "./src"),
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -11,6 +15,7 @@ export default defineConfig({
       {
         entry: "electron/main.ts",
         vite: {
+          resolve: { alias },
           build: {
             outDir: "dist-electron",
             rollupOptions: {
@@ -25,6 +30,7 @@ export default defineConfig({
           args.reload()
         },
         vite: {
+          resolve: { alias },
           build: {
             outDir: "dist-electron",
           },
@@ -34,9 +40,7 @@ export default defineConfig({
     electronRenderer(),
   ],
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias,
   },
-
 })
+

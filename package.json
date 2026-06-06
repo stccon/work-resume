@@ -11,7 +11,8 @@
     "electron:dev": "vite",
     "test": "vitest run",
     "test:watch": "vitest",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.16.2",

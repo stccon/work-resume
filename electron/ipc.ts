@@ -9,12 +9,16 @@ import {
   getResumesDir,
   getVisualThemesDir,
   generateResumeFileName,
+  getAppBaseDir,
 } from "./paths"
 import { renderResumeDocument } from "../src/lib/resume-renderer"
 import { POLISH_SYSTEM_PROMPT, buildPolishUserPrompt } from "../src/adapter/polish"
 
 const Store = require("electron-store")
-const store = new Store({ encryptionKey: "resume-ai-local" })
+const store = new Store({
+  cwd: getAppBaseDir(),
+  encryptionKey: "resume-ai-local",
+})
 
 interface SavedResume {
   id: string

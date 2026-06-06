@@ -2,9 +2,27 @@ import { app, BrowserWindow, Menu } from "electron"
 import path from "path"
 import fs from "fs"
 import { setupIPC, initOpencode } from "./ipc"
-import { getTemplatesDir, getResumesDir, getVisualThemesDir } from "./paths"
+import {
+  getTemplatesDir,
+  getResumesDir,
+  getVisualThemesDir,
+  getAppBaseDir,
+} from "./paths"
 
 let mainWindow: BrowserWindow | null = null
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+  process.exit(0)
+}
+
+app.on("second-instance", () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
 
 function copyJsonDir(srcDir: string, targetDir: string) {
   if (!fs.existsSync(srcDir)) return
@@ -23,11 +41,48 @@ function ensureDirectories() {
   getResumesDir()
   getVisualThemesDir()
 
-  const devTemplates = path.join(__dirname, "..", "templates")
-  copyJsonDir(devTemplates, getTemplatesDir())
+  const baseDir = getAppBaseDir()
+  copyJsonDir(path.join(baseDir, "templates"), getTemplatesDir())
+  copyJsonDir(path.join(baseDir, "themes"), getVisualThemesDir())
+}
 
-  const devVisualTemplates = path.join(__dirname, "..", "themes")
-  copyJsonDir(devVisualTemplates, getVisualThemesDir())
+function migrateLegacyUserData() {
+  if (!app.isPackaged) return
+  const oldRoot = app.getPath("userData")
+  if (!fs.existsSync(oldRoot)) return
+
+  const pairs: Array<[string, string]> = [
+    [path.join(oldRoot, "resumes"), getResumesDir()],
+    [path.join(oldRoot, "themes"), getVisualThemesDir()],
+  ]
+  for (const [src, dst] of pairs) {
+    if (!fs.existsSync(src)) continue
+    const existing = fs.readdirSync(dst).filter((f) => f !== ".write-probe")
+    if (existing.length > 0) continue
+    for (const f of fs.readdirSync(src)) {
+      const s = path.join(src, f)
+      const d = path.join(dst, f)
+      if (!fs.existsSync(d)) {
+        try {
+          fs.copyFileSync(s, d)
+          console.log(`[migration] copied ${s} -> ${d}`)
+        } catch (err) {
+          console.warn(`[migration] failed to copy ${s}:`, err)
+        }
+      }
+    }
+  }
+
+  const oldCfg = path.join(oldRoot, "config.json")
+  const newCfg = path.join(getAppBaseDir(), "config.json")
+  if (fs.existsSync(oldCfg) && !fs.existsSync(newCfg)) {
+    try {
+      fs.copyFileSync(oldCfg, newCfg)
+      console.log(`[migration] config.json copied from legacy userData`)
+    } catch (err) {
+      console.warn(`[migration] config.json copy failed:`, err)
+    }
+  }
 }
 
 function createWindow() {
@@ -81,6 +136,7 @@ process.on("unhandledRejection", (err) => {
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
   ensureDirectories()
+  migrateLegacyUserData()
   setupIPC()
   await initOpencode()
   createWindow()
