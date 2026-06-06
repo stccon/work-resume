@@ -1,0 +1,86 @@
+{
+  "name": "v3-editorial",
+  "label": "Editorial",
+  "description": "杂志/出版物风格的衬线简历。暖白底 + 棕红 accent + 大留白 + 衬线大姓名。适合学术、写作、内容、品牌类岗位",
+  "hasAvatar": false,
+  "typeFamily": "serif",
+  "sectionOrder": [
+    "personal",
+    "summary",
+    "experience",
+    "education",
+    "projects",
+    "skills",
+    "awards",
+    "certifications"
+  ],
+  "fonts": {
+    "heading": "'Source Serif Pro', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, 'Times New Roman', serif",
+    "body": "'Source Serif Pro', 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', Georgia, 'Times New Roman', serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+  },
+  "typography": {
+    "name": {
+      "size": "38px",
+      "weight": 700,
+      "lineHeight": "44px",
+      "letterSpacing": "-0.01em"
+    },
+    "title": {
+      "size": "14px",
+      "weight": 400,
+      "lineHeight": "20px"
+    },
+    "sectionTitle": {
+      "size": "13px",
+      "weight": 700,
+      "lineHeight": "20px",
+      "letterSpacing": "0.04em",
+      "transform": "uppercase"
+    },
+    "body": {
+      "size": "11.5px",
+      "weight": 400,
+      "lineHeight": "20px"
+    },
+    "entryTitle": {
+      "size": "13px",
+      "weight": 600,
+      "lineHeight": "20px"
+    },
+    "entryDate": {
+      "size": "11px",
+      "weight": 400,
+      "lineHeight": "20px"
+    }
+  },
+  "colors": {
+    "primary": "#1a1a1a",
+    "accent": "#a85432",
+    "background": "#fefdfb",
+    "surface": "#f5f1ea",
+    "border": "#d8d2c5",
+    "muted": "#7a7368",
+    "text": "#1a1a1a"
+  },
+  "baseline": 4,
+  "spacing": {
+    "pagePadding": "64px",
+    "sectionGap": "32px",
+    "entryGap": "20px"
+  },
+  "density": "spacious",
+  "sectionTitleRule": "full-line",
+  "sectionTitleRuleWidth": "100%",
+  "sectionTitleRuleHeight": "0.5px",
+  "sectionTitleRuleOffset": "12px",
+  "bullet": "•",
+  "bulletColor": "accent",
+  "tagStyle": "underline",
+  "print": {
+    "pageBreakInsideEntry": true,
+    "pageBreakInsideSection": true,
+    "tabularNums": true,
+    "hanLatinSpacing": "0.05em"
+  }
+}

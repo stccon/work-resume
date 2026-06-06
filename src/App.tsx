@@ -119,12 +119,12 @@ function copyRgbToCanvas(
 function composeDataWithAvatar(
   data: ResumeData | null,
   avatarEntry: { dataUrl: string; enabled: boolean } | null,
-  _theme: VisualTheme,
+  theme: VisualTheme,
 ): ResumeData | null {
   if (!data) return data
   const personal = { ...(data.sections.personal || {}) }
 
-  if (avatarEntry && avatarEntry.enabled && avatarEntry.dataUrl) {
+  if (theme.hasAvatar && avatarEntry && avatarEntry.enabled && avatarEntry.dataUrl) {
     personal.avatar = avatarEntry.dataUrl
   } else {
     delete personal.avatar
@@ -741,9 +741,26 @@ function App() {
   }
 
   const handleVisualThemeChange = (theme: VisualTheme) => {
+    const prevHasAvatar = currentVisualTheme.hasAvatar
     setCurrentVisualTheme(theme)
     try { localStorage.setItem(VISUAL_THEME_STORAGE_KEY, theme.name) } catch { /* ignore */ }
     window.electronAPI.setCurrentVisualTheme(theme.name)
+
+    if (activeResume) {
+      const rid = activeResume.id
+      const avatarEntry = avatars[rid]
+      if (prevHasAvatar && !theme.hasAvatar && avatarEntry?.enabled) {
+        setAvatarEnabledFor(rid, false).catch(() => { /* noop */ })
+        toast("info", `已切换到 ${theme.label} · 头像已自动关闭（该主题不包含头像布局）`)
+      } else if (!prevHasAvatar && theme.hasAvatar && avatarEntry?.dataUrl && !avatarEntry.enabled) {
+        setAvatarEnabledFor(rid, true).catch(() => { /* noop */ })
+        toast("info", `已切换到 ${theme.label} · 头像已自动开启`)
+      } else {
+        toast("success", `已切换到 ${theme.label}`)
+      }
+    } else {
+      toast("success", `已切换到 ${theme.label}`)
+    }
   }
 
   const handleDeleteImportedTheme = async (themeName: string) => {
@@ -820,6 +837,7 @@ function App() {
                   title={activeResume.title}
                   avatar={avatars[rid]?.dataUrl ?? null}
                   avatarEnabled={!!avatars[rid]?.enabled}
+                  themeHasAvatar={currentVisualTheme.hasAvatar}
                   onUpload={(dataUrl) => setAvatarFor(rid, dataUrl)}
                   onRemove={() => removeAvatarFor(rid)}
                   onToggleEnabled={(enabled) => setAvatarEnabledFor(rid, enabled)}

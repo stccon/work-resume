@@ -1,0 +1,87 @@
+{
+  "name": "v3-linear",
+  "label": "Linear",
+  "description": "工程师风格的 changelog 排版。密集字号 + tabular-nums + short-line section title",
+  "hasAvatar": false,
+  "typeFamily": "sans",
+  "sectionOrder": [
+    "personal",
+    "summary",
+    "experience",
+    "projects",
+    "skills",
+    "education",
+    "awards",
+    "certifications"
+  ],
+  "fonts": {
+    "heading": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+  },
+  "typography": {
+    "name": {
+      "size": "22px",
+      "weight": 600,
+      "lineHeight": "28px",
+      "letterSpacing": "-0.01em"
+    },
+    "title": {
+      "size": "13px",
+      "weight": 500,
+      "lineHeight": "20px"
+    },
+    "sectionTitle": {
+      "size": "11px",
+      "weight": 600,
+      "lineHeight": "16px",
+      "letterSpacing": "0.08em",
+      "transform": "uppercase"
+    },
+    "body": {
+      "size": "11px",
+      "weight": 400,
+      "lineHeight": "16px"
+    },
+    "entryTitle": {
+      "size": "12px",
+      "weight": 600,
+      "lineHeight": "16px"
+    },
+    "entryDate": {
+      "size": "10.5px",
+      "weight": 400,
+      "lineHeight": "16px",
+      "tabularNums": true
+    }
+  },
+  "colors": {
+    "primary": "#0a0a0a",
+    "accent": "#5b6cff",
+    "background": "#ffffff",
+    "surface": "#f5f5f5",
+    "border": "#e5e5e5",
+    "muted": "#737373",
+    "text": "#0a0a0a"
+  },
+  "baseline": 4,
+  "spacing": {
+    "pagePadding": "48px",
+    "sectionGap": "28px",
+    "entryGap": "16px"
+  },
+  "density": "dense",
+  "sectionTitleRule": "short-line",
+  "sectionTitleRuleWidth": "32px",
+  "sectionTitleRuleHeight": "1.5px",
+  "sectionTitleRuleOffset": "8px",
+  "bullet": "›",
+  "bulletColor": "accent",
+  "tagStyle": "underline",
+  "print": {
+    "pageBreakInsideEntry": true,
+    "pageBreakInsideSection": true,
+    "tabularNums": true,
+    "hanLatinSpacing": "0.04em"
+  }
+}

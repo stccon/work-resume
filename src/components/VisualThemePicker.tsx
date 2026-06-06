@@ -1,24 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from "react"
 import { Trash2 } from "lucide-react"
-import type { VisualTheme } from "@/types/visual-template"
+import type { V3Theme } from "@/types/visual-template"
 import { toast } from "./Toast"
 
 interface VisualThemePickerProps {
-  themes: VisualTheme[]
-  currentTheme: VisualTheme
-  onChange: (theme: VisualTheme) => void
+  themes: V3Theme[]
+  currentTheme: V3Theme
+  onChange: (theme: V3Theme) => void
   onDeleteImported?: (themeName: string) => void
-}
-
-const FAMILY_LABEL: Record<string, string> = {
-  minimal: "极简",
-  modern: "商务",
-  editorial: "编辑",
-}
-
-const SERIES_LABEL: Record<string, string> = {
-  v1: "经典",
-  v2: "Premium",
 }
 
 export function VisualThemePicker({
@@ -30,12 +19,12 @@ export function VisualThemePicker({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  const handleSelect = useCallback((theme: VisualTheme) => {
+  const handleSelect = useCallback((theme: V3Theme) => {
     onChange(theme)
     setOpen(false)
   }, [onChange])
 
-  const handleDelete = useCallback((e: React.MouseEvent, theme: VisualTheme) => {
+  const handleDelete = useCallback((e: React.MouseEvent, theme: V3Theme) => {
     e.stopPropagation()
     e.preventDefault()
     if (!onDeleteImported) return
@@ -45,12 +34,10 @@ export function VisualThemePicker({
   }, [onDeleteImported])
 
   const grouped = useMemo(() => {
-    const imported = themes.filter((t) => t.isImported)
-    const v1 = themes.filter((t) => !t.isImported && (t.series || "v1") === "v1")
-    const v2 = themes.filter((t) => !t.isImported && t.series === "v2")
+    const imported = themes.filter((t) => (t as any).isImported)
+    const builtIn = themes.filter((t) => !(t as any).isImported)
     const groups = [
-      { key: "v2", label: SERIES_LABEL.v2, items: v2 },
-      { key: "v1", label: SERIES_LABEL.v1, items: v1 },
+      { key: "built-in", label: "内置主题", items: builtIn },
     ]
     if (imported.length > 0) {
       groups.unshift({ key: "imported", label: "导入主题", items: imported })
@@ -69,9 +56,9 @@ export function VisualThemePicker({
           style={{ backgroundColor: currentTheme.colors.primary }}
         />
         <span>{currentTheme.label}</span>
-        {(currentTheme.series === "v2") && (
+        {currentTheme.hasAvatar && (
           <span className="text-[9px] px-1 py-0.5 rounded bg-primary/10 text-primary font-medium shrink-0">
-            PRO
+            头像
           </span>
         )}
         <svg className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,20 +90,20 @@ export function VisualThemePicker({
                       />
                       <span
                         className="w-3 h-3 rounded-full ring-1 ring-border"
-                        style={{ backgroundColor: theme.colors.primaryLight }}
+                        style={{ backgroundColor: theme.colors.accent }}
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate">{theme.label}</span>
-                        {theme.series === "v2" && theme.family && (
+                        {theme.hasAvatar && (
                           <span className="text-[9px] px-1 py-px rounded bg-accent text-muted-foreground shrink-0">
-                            {FAMILY_LABEL[theme.family] || theme.family}
+                            头像
                           </span>
                         )}
-                        {theme.isImported && theme.confidence !== undefined && (
+                        {(theme as any).isImported && (theme as any).confidence !== undefined && (
                           <span className="text-[9px] px-1 py-px rounded bg-orange-500/10 text-orange-600 dark:text-orange-400 shrink-0">
-                            {Math.round(theme.confidence * 100)}%
+                            {Math.round((theme as any).confidence * 100)}%
                           </span>
                         )}
                       </div>
@@ -129,7 +116,7 @@ export function VisualThemePicker({
                         双栏
                       </span>
                     )}
-                    {theme.isImported && onDeleteImported && (
+                    {(theme as any).isImported && onDeleteImported && (
                       <button
                         onClick={(e) => handleDelete(e, theme)}
                         title="删除导入主题"

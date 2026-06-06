@@ -1,0 +1,97 @@
+{
+  "name": "v3-onyx",
+  "label": "Onyx",
+  "description": "门面级高管双栏简历。深色 sidebar + 金色 accent + 大尺寸头像。适合资深岗位、董事/VP/管理岗",
+  "hasAvatar": true,
+  "typeFamily": "sans",
+  "layout": "two-column",
+  "sidebarWidth": "34%",
+  "sidebarBg": "#0f1d2e",
+  "sidebarText": "#f3f4f6",
+  "sectionOrder": [
+    "personal",
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "education",
+    "awards",
+    "certifications"
+  ],
+  "fonts": {
+    "heading": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "body": "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif",
+    "mono": "ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
+  },
+  "typography": {
+    "name": {
+      "size": "26px",
+      "weight": 700,
+      "lineHeight": "32px",
+      "letterSpacing": "-0.01em"
+    },
+    "title": {
+      "size": "13px",
+      "weight": 500,
+      "lineHeight": "20px"
+    },
+    "sectionTitle": {
+      "size": "12px",
+      "weight": 600,
+      "lineHeight": "16px",
+      "letterSpacing": "0.08em",
+      "transform": "uppercase"
+    },
+    "body": {
+      "size": "11px",
+      "weight": 400,
+      "lineHeight": "16px"
+    },
+    "entryTitle": {
+      "size": "12px",
+      "weight": 600,
+      "lineHeight": "16px"
+    },
+    "entryDate": {
+      "size": "10.5px",
+      "weight": 400,
+      "lineHeight": "16px",
+      "tabularNums": true
+    }
+  },
+  "colors": {
+    "primary": "#1a1a1a",
+    "accent": "#c9a86a",
+    "background": "#ffffff",
+    "surface": "#0f1d2e",
+    "border": "#e5e5e5",
+    "muted": "#737373",
+    "text": "#1a1a1a"
+  },
+  "baseline": 8,
+  "spacing": {
+    "pagePadding": "32px",
+    "sectionGap": "24px",
+    "entryGap": "16px"
+  },
+  "density": "spacious",
+  "sectionTitleRule": "short-line",
+  "sectionTitleRuleWidth": "32px",
+  "sectionTitleRuleHeight": "1.5px",
+  "sectionTitleRuleOffset": "8px",
+  "bullet": "—",
+  "bulletColor": "accent",
+  "tagStyle": "flat",
+  "print": {
+    "pageBreakInsideEntry": true,
+    "pageBreakInsideSection": true,
+    "tabularNums": true,
+    "hanLatinSpacing": "0.04em"
+  },
+  "avatar": {
+    "placement": "sidebar-top",
+    "size": "large",
+    "shape": "circle",
+    "border": "thin"
+  }
+}

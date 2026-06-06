@@ -6,6 +6,7 @@ interface ResumeNamePillProps {
   title: string
   avatar: string | null
   avatarEnabled: boolean
+  themeHasAvatar: boolean
   onUpload: (dataUrl: string) => void
   onRemove: () => void
   onToggleEnabled: (enabled: boolean) => void
@@ -15,6 +16,7 @@ export function ResumeNamePill({
   title,
   avatar,
   avatarEnabled,
+  themeHasAvatar,
   onUpload,
   onRemove,
   onToggleEnabled,
@@ -110,12 +112,21 @@ export function ResumeNamePill({
 
               {avatar && (
                 <div className="px-3 py-2 flex items-center justify-between text-xs border-t border-border/50 mt-1 pt-2">
-                  <span>显示头像</span>
+                  <div className="flex flex-col">
+                    <span>显示头像</span>
+                    {!themeHasAvatar && (
+                      <span className="text-[10px] text-muted-foreground">
+                        当前主题不使用头像
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => onToggleEnabled(!avatarEnabled)}
-                    className={`relative w-8 h-4 rounded-full transition-colors ${avatarEnabled ? "bg-primary" : "bg-muted"}`}
+                    disabled={!themeHasAvatar}
+                    className={`relative w-8 h-4 rounded-full transition-colors ${avatarEnabled ? "bg-primary" : "bg-muted"} ${!themeHasAvatar ? "opacity-50 cursor-not-allowed" : ""}`}
                     aria-pressed={avatarEnabled}
+                    aria-disabled={!themeHasAvatar}
                   >
                     <span
                       className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform ${avatarEnabled ? "left-4" : "left-0.5"}`}
