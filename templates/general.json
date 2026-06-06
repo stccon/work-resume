@@ -76,7 +76,7 @@
       "fields": [
         { "id": "school", "label": "学校", "type": "text", "required": true, "order": 1, "prompt": "你的最高学历是哪所学校？" },
         { "id": "major", "label": "专业", "type": "text", "required": true, "order": 2, "prompt": "你学的什么专业？" },
-        { "id": "degree", "label": "学位", "type": "text", "required": true, "order": 3, "prompt": "是什么学位？（如：本科 / 硕士 / 博士）" },
+        { "id": "degree", "label": "学历", "type": "text", "required": true, "order": 3, "prompt": "是什么学历？（如：本科 / 硕士 / 博士）" },
         { "id": "startDate", "label": "入学时间", "type": "date", "required": false, "order": 4, "prompt": "什么时候入学？（如：2018.09）" },
         { "id": "endDate", "label": "毕业时间", "type": "date", "required": true, "order": 5, "prompt": "什么时候毕业？（如：2022.06）" },
         { "id": "gpa", "label": "GPA/排名", "type": "text", "required": false, "order": 6, "prompt": "GPA 或专业排名是多少？（如 GPA 3.8/4.0 或排名前 10%，应届生建议填写）" },
