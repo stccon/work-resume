@@ -930,8 +930,8 @@ function renderSectionContent(section, sectionData, theme, sidebar = false) {
       if (mainTitle || hasDate) {
         html += `<div class="${headerCls}">`;
         html += `<div>`;
-        if (mainTitle) html += `<span class="${mainTitleCls}">${formatValue(mainTitle)}</span>`;
-        if (subTitle) html += `<div class="${subTitleCls}">${formatValue(subTitle)}</div>`;
+        if (mainTitle) html += `<span class="${mainTitleCls}"${dataAttrsToString({ ...entryData, field: `entry${entry.index}_${titleKey}` })}>${formatValue(mainTitle)}</span>`;
+        if (subTitle) html += `<div class="${subTitleCls}"${dataAttrsToString({ ...entryData, field: `entry${entry.index}_${subtitleKey}` })}>${formatValue(subTitle)}</div>`;
         html += `</div>`;
         if (hasDate) html += `<span class="${dateCls}">${formatValue(dateStr)}</span>`;
         html += `</div>`;

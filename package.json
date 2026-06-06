@@ -14,9 +14,9 @@
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "^1.0.0",
+    "@opencode-ai/sdk": "^1.16.2",
     "electron-store": "^8.2.0",
-    "opencode-ai": "^1.15.12",
+    "opencode-ai": "^1.16.2",
     "pdfjs-dist": "^6.0.227",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
