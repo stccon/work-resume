@@ -116,3 +116,40 @@ describe("avatar stripping", () => {
     expect(result).toEqual({ summary: { summary: "test" } })
   })
 })
+
+describe("AI behavior rules", () => {
+  it("buildResumeContext should embed both safety and proactive rules", () => {
+    const result = buildResumeContext(null)
+    expect(result).toContain("安全边界")
+    expect(result).toContain("主动建议")
+    expect(result).toContain("修改源文件")
+    expect(result).toContain("1-3 条")
+  })
+
+  it("buildFirstMessagePrompt should embed safety rule (returning user)", () => {
+    const resume: ResumeData = {
+      template: "general",
+      sections: { personal: { name: "张三" } },
+    }
+    const result = buildFirstMessagePrompt(resume)
+    expect(result).toContain("安全边界")
+    expect(result).toContain("修改源文件")
+  })
+
+  it("buildFirstMessagePrompt should embed safety rule (first-time user)", () => {
+    const result = buildFirstMessagePrompt(null)
+    expect(result).toContain("安全边界")
+    expect(result).toContain("修改源文件")
+  })
+
+  it("buildRefinePrompt should embed proactive suggestions", () => {
+    const resume: ResumeData = {
+      template: "general",
+      sections: { personal: { name: "张三" } },
+    }
+    const result = buildRefinePrompt(resume, 1)
+    expect(result).toContain("安全边界")
+    expect(result).toContain("主动建议")
+    expect(result).toContain("挑刺式修改建议")
+  })
+})
