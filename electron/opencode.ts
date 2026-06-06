@@ -45,7 +45,6 @@ function spawnServer(): Promise<string> {
   serverProcess = spawn(cmd, ["serve"], {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "pipe"],
-    shell: true,
     env: process.env,
   })
   const proc = serverProcess

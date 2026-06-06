@@ -24,8 +24,11 @@ app.on("second-instance", () => {
   }
 })
 
-function copyJsonDir(srcDir: string, targetDir: string) {
-  if (!fs.existsSync(srcDir)) return
+function copyJsonDir(srcDir: string, targetDir: string, label?: string) {
+  if (!fs.existsSync(srcDir)) {
+    console.warn(`[startup] source dir not found: ${srcDir}${label ? ` (${label})` : ""}`)
+    return
+  }
   for (const file of fs.readdirSync(srcDir)) {
     if (file.endsWith(".json")) {
       const dest = path.join(targetDir, file)
@@ -41,9 +44,21 @@ function ensureDirectories() {
   getResumesDir()
   getVisualThemesDir()
 
-  const baseDir = getAppBaseDir()
-  copyJsonDir(path.join(baseDir, "templates"), getTemplatesDir())
-  copyJsonDir(path.join(baseDir, "themes"), getVisualThemesDir())
+  const sourceBase = app.isPackaged ? app.getAppPath() : getAppBaseDir()
+  copyJsonDir(path.join(sourceBase, "templates"), getTemplatesDir(), "templates")
+  copyJsonDir(path.join(sourceBase, "themes"), getVisualThemesDir(), "themes")
+
+  const tmpl = path.join(getTemplatesDir(), "general.json")
+  const theme = path.join(getVisualThemesDir(), "v3-editorial.json")
+  if (!fs.existsSync(tmpl) || !fs.existsSync(theme)) {
+    console.error(
+      `[startup] FATAL: bundled templates/themes not copied.\n` +
+      `  expected template: ${tmpl}\n` +
+      `  expected theme:    ${theme}\n` +
+      `  source dir:        ${sourceBase}\n` +
+      `  App will be unable to create or open resumes.`
+    )
+  }
 }
 
 function migrateLegacyUserData() {
