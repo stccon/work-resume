@@ -31,3 +31,5 @@ files:
 extraResources:
   - from: node_modules/opencode-ai/bin
     to: opencode-ai/bin
+
+afterPack: scripts/clean-after-pack.js
