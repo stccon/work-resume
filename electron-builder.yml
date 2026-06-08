@@ -27,6 +27,7 @@ files:
   - themes
   - package.json
   - "!node_modules/@napi-rs/canvas*/**"
+  - "!node_modules/pdfjs-dist/**/*.map"
 
 extraResources:
   - from: node_modules/opencode-ai/bin

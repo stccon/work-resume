@@ -65,7 +65,8 @@ tsconfig.tsbuildinfo
 # Generated PDF exports
 resumes/
 
-# Scratch / debug helpers
+# Temp / scratch
+tmp/
 scratch/
 test-*.bat
 test-*.ps1
