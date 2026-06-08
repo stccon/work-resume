@@ -2,6 +2,8 @@ appId: com.resume-ai.assistant
 productName: AI简历助手
 copyright: Copyright © 2026
 
+compression: maximum
+
 directories:
   output: release
 
@@ -24,6 +26,7 @@ files:
   - templates
   - themes
   - package.json
+  - "!node_modules/@napi-rs/canvas*/**"
 
 extraResources:
   - from: node_modules/opencode-ai/bin
