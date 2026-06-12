@@ -8,7 +8,7 @@ dist/
 dist-electron/
 build/
 out/
-lib/
+/lib/
 release/
 *.nsis.7z
 *.blockmap
