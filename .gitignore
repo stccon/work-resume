@@ -62,7 +62,8 @@ tsconfig.tsbuildinfo
 # Testing
 .jest-cache/
 
-# Generated PDF exports
+# Generated runtime data
+config.json
 resumes/
 
 # Temp / scratch
