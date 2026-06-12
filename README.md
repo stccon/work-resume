@@ -124,6 +124,8 @@ npm install
 npm run electron:dev
 ```
 
+> **国内用户注意：** 仓库已内置 `.npmrc` 配置了 `npmmirror.com` 镜像，`npm install` 会自动走国内镜像下载 Electron 二进制（~100MB）和所有依赖，无需额外设置。
+
 ### 2. 首次启动
 
 应用启动后会出现「欢迎引导」界面，介绍主界面布局。读完点「知道了」即可进入主界面。
@@ -245,7 +247,7 @@ PDF 默认保存到应用的 `resumes/` 目录（开发模式在项目根的 `re
 - **包管理器**：npm（仓库已带 `package-lock.json`）或 pnpm
 - **操作系统**：Windows 10/11、macOS 12+、主流 Linux 发行版
 - **磁盘**：开发模式约 1.5 GB（含 Electron + opencode 二进制）
-- **Opencode**：开发期 `npm install` 会自动安装 `opencode-ai` 子进程；打包时该二进制会随应用分发
+- **Opencode**：开发期 `npm install` 会自动安装 `opencode-ai` 及匹配当前平台的原生二进制；打包时该二进制会随应用分发
 
 ### 2. 快速开始
 
@@ -255,6 +257,8 @@ cd work-resume
 npm install
 npm run electron:dev
 ```
+
+> **国内用户注意：** 仓库已内置 `.npmrc`，自动走 `npmmirror.com` 镜像下载 Electron 二进制和所有依赖，`npm install` 一行命令即可，无需额外配置。
 
 `electron:dev` 脚本会同时启动 Vite 开发服务器和 Electron 主进程，渲染进程代码改动会自动热更新。
 
@@ -419,7 +423,31 @@ NSIS 安装时 `perMachine: false`（`electron-builder.yml`），默认装到 `%
 
 #### 6.3 国内网络环境的镜像
 
-默认 electron-builder 从 GitHub 下载 Electron 二进制，国内可能超时。在 `package.json` 的 `build` 字段下加：
+项目通过两种方式解决国内下载慢的问题：
+
+##### 开发期（npm install）
+
+仓库根目录的 `.npmrc` 已配置：
+
+```ini
+registry=https://registry.npmmirror.com/
+electron_mirror=https://npmmirror.com/mirrors/electron/
+```
+
+- `registry` — npm 包下载走国内镜像
+- `electron_mirror` — `electron` 包的 postinstall 脚本通过 `@electron/get` 读取此配置，从国内镜像下载 Electron 二进制（~100MB）
+
+此外，`opencode-ai` 自身已声明了全平台原生二进制（`opencode-windows-x64`、`opencode-darwin-arm64` 等共 12 个）作为 `optionalDependencies`，且每个包在其 `package.json` 中标注了 `os` 和 `cpu`（如 `{ os: ["win32"], cpu: ["x64"] }`）。npm 在安装时会自动过滤——**只下载匹配当前平台的包**，不会跨平台下载无用二进制。`opencode-ai` 的 postinstall 运行时通过 `require.resolve()` 找到对应平台的二进制，避免嵌套 `npm install` 导致的静默卡顿。
+
+**国内用户一行命令即可：**
+
+```bash
+npm install
+```
+
+##### 打包期（electron-builder）
+
+打包时 electron-builder 下载 Electron 和签名工具走不同配置。在 `package.json` 的 `build` 字段下加：
 
 ```json
 "build": {
@@ -428,7 +456,7 @@ NSIS 安装时 `perMachine: false`（`electron-builder.yml`），默认装到 `%
 }
 ```
 
-或者临时：
+或者临时用环境变量：
 
 ```powershell
 $env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
