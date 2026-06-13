@@ -137,7 +137,7 @@ function renderCSS(theme: VisualTheme): string {
   }
 
   if (t.print.pageBreakInsideEntry) {
-    parts.push(`@media print {\n.resume-entry {\npage-break-inside:avoid;\n}\n.resume-section {\npage-break-inside:${t.print.pageBreakInsideSection ? "avoid" : "auto"};\n}\n}`)
+    parts.push(`@media print {\n.resume-entry {\npage-break-inside:avoid;\n}\n}`)
   }
 
   if (t.print.hanLatinSpacing) {
@@ -359,7 +359,8 @@ export function renderResumeBody(
   template: TemplateDefinition,
   theme: VisualTheme,
 ): string {
-  return buildBody(data, template, theme)
+  const body = buildBody(data, template, theme)
+  return `<div class="resume-body">\n${body}\n</div>`
 }
 
 export function renderResumeDocument(
@@ -369,8 +370,7 @@ export function renderResumeDocument(
   _fileName?: string,
 ): string {
   const css = renderCSS(theme)
-  const body = buildBody(data, template, theme)
-  const fonts = theme.fonts
+  const body = renderResumeBody(data, template, theme)
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -382,9 +382,7 @@ ${css}
 </style>
 </head>
 <body>
-<div class="resume-body" style="font-family:${fonts.body};background:${theme.colors.background};color:${theme.colors.text}">
 ${body}
-</div>
 </body>
 </html>`
 }
