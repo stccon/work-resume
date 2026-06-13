@@ -11,7 +11,7 @@ function esc(s: unknown): string {
     .replace(/"/g, "&quot;")
 }
 
-function renderCSS(theme: VisualTheme): string {
+function renderCSS(theme: VisualTheme, scopePrefix = ""): string {
   const t = theme
   const c = t.colors as unknown as Record<string, string>
   const parts: string[] = []
@@ -31,7 +31,8 @@ function renderCSS(theme: VisualTheme): string {
     return r
   }
 
-  parts.push(sec("*", { "margin": "0", "padding": "0", "box-sizing": "border-box" }))
+  const starSel = scopePrefix ? `${scopePrefix} *` : "*"
+  parts.push(sec(starSel, { "margin": "0", "padding": "0", "box-sizing": "border-box" }))
 
   const bodyBase: Record<string, string> = {
     "font-family": t.fonts.body,
@@ -41,7 +42,8 @@ function renderCSS(theme: VisualTheme): string {
     "print-color-adjust": "exact",
   }
   if (t.print.tabularNums) bodyBase["font-variant-numeric"] = "tabular-nums"
-  parts.push(sec("body", bodyBase))
+  const bodySel = scopePrefix || "body"
+  parts.push(sec(bodySel, bodyBase))
   parts.push(sec(".resume-name", { ...tyProps(t.typography.name), "color": c["primary"] }))
   parts.push(sec(".resume-title", { ...tyProps(t.typography.title), "color": c["text"] }))
   parts.push(sec(".resume-section-title", { ...tyProps(t.typography.sectionTitle), "color": c["primary"], "margin-bottom": "8px" }))
@@ -351,7 +353,7 @@ function renderAvatar(data: ResumeData): string {
 }
 
 export function renderResumeCSS(theme: VisualTheme): string {
-  return renderCSS(theme)
+  return renderCSS(theme, ".resume-preview")
 }
 
 export function renderResumeBody(
@@ -360,7 +362,7 @@ export function renderResumeBody(
   theme: VisualTheme,
 ): string {
   const body = buildBody(data, template, theme)
-  return `<div class="resume-body">\n${body}\n</div>`
+  return `<div class="resume-preview"><div class="resume-body">\n${body}\n</div></div>`
 }
 
 export function renderResumeDocument(
